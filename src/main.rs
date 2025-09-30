@@ -37,9 +37,9 @@ fn load_cert_files(host: &str) -> Result<(Vec<u8>, Vec<u8>)> {
 }
 
 fn from_files(keyfile: Vec<u8>, certfile: Vec<u8>) -> Result<HostCertificate> {
-    let key = PKey::private_key_from_pem(&keyfile).unwrap();
-    let certs = X509::stack_from_pem(&certfile).unwrap();
-    if certs.len() == 0 {
+    let key = PKey::private_key_from_pem(&keyfile)?;
+    let certs = X509::stack_from_pem(&certfile)?;
+    if certs.is_empty() {
         bail!("No certificates found in TLS .crt file");
     }
 
@@ -54,9 +54,12 @@ impl Callbacks {
         info!("Loading host certificates");
 
         let certmap = hosts.iter()
-            .map(|h| (h, load_cert_files(h).unwrap()))
-            .map(|(h, (k, c))| (h.to_string(), from_files(k, c).unwrap()))
-            .collect();
+            .map(|h| {
+                let (k, c) = load_cert_files(h)?;
+                let cert = from_files(k, c)?;
+                Ok((h.to_string(), cert))
+            })
+            .collect::<Result<papaya::HashMap<_, _>>>()?;
 
         info!("Loaded certificates");
 
@@ -78,14 +81,18 @@ impl TlsAccept for Callbacks {
 
         //        let cert = load_cert(host).await.unwrap();
         let amap = self.certmap.pin_owned();
-        let cert = amap.get(&host.to_string()).unwrap();
+        let cert = amap.get(&host.to_string())
+            .expect("Certificate for host not found");
 
-        ssl.set_private_key(&cert.key).unwrap();
-        ssl.set_certificate(&cert.certs[0]).unwrap();
+        ssl.set_private_key(&cert.key)
+            .expect("Failed to set private key");
+        ssl.set_certificate(&cert.certs[0])
+            .expect("Failed to set certificate");
 
         if cert.certs.len() > 1 {
             for c in cert.certs[1..].iter() {
-                ssl.add_chain_cert(&c).unwrap();
+                ssl.add_chain_cert(&c)
+                    .expect("Failed to add chain certificate");
             }
         }
     }
