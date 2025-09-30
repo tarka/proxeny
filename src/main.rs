@@ -1,16 +1,69 @@
 
-use std::{fs::read, str::FromStr};
+use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use pingora::{
-    http::RequestHeader, listeners::{tls::TlsSettings, TlsAccept, TlsAcceptCallbacks}, prelude::HttpPeer, protocols::tls::TlsRef, proxy::{http_proxy_service, ProxyHttp, Session}, server::Server, tls::{pkey::PKey, ssl::NameType, x509::X509}
+    http::RequestHeader,
+    listeners::{tls::TlsSettings, TlsAccept},
+    prelude::HttpPeer,
+    protocols::tls::TlsRef,
+    proxy::{http_proxy_service, ProxyHttp, Session},
+    server::Server,
+    tls::{pkey::{PKey, Private}, ssl::NameType, x509::X509}
 };
 use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-struct Callbacks {}
+const TEST_HOSTS: [&str; 2] = ["dvalinn.haltcondition.net", "adguard.haltcondition.net"];
+const TEST_DIR: &str = "tests/data/certs/acme";
+
+
+struct HostCertificate {
+    key: PKey<Private>,
+    certs: Vec<X509>,
+}
+
+struct Callbacks {
+    certmap: papaya::HashMap<String, HostCertificate>,
+}
+
+fn load_cert_files(host: &str) -> Result<(Vec<u8>, Vec<u8>)> {
+    let keyfile = std::fs::read(format!("{TEST_DIR}/{host}.key"))?;
+    let certfile = std::fs::read(format!("{TEST_DIR}/{host}.crt"))?;
+
+    Ok((keyfile, certfile))
+}
+
+fn from_files(keyfile: Vec<u8>, certfile: Vec<u8>) -> Result<HostCertificate> {
+    let key = PKey::private_key_from_pem(&keyfile).unwrap();
+    let certs = X509::stack_from_pem(&certfile).unwrap();
+    if certs.len() == 0 {
+        bail!("No certificates found in TLS .crt file");
+    }
+
+    let hostcert = HostCertificate { key, certs };
+
+    Ok(hostcert)
+}
+
+
+impl Callbacks {
+    fn new(hosts: Vec<&str>) -> Result<Self> {
+        info!("Loading host certificates");
+
+        let certmap = hosts.iter()
+            .map(|h| (h, load_cert_files(h).unwrap()))
+            .map(|(h, (k, c))| (h.to_string(), from_files(k, c).unwrap()))
+            .collect();
+
+        info!("Loaded certificates");
+
+        Ok(Callbacks { certmap })
+    }
+
+}
 
 #[async_trait]
 impl TlsAccept for Callbacks {
@@ -23,20 +76,15 @@ impl TlsAccept for Callbacks {
 
         info!("TLS Host is {host}; loading certs");
 
-        let keyfile = read("tests/data/certs/acme/test.key").unwrap();
-        let certfile = read("tests/data/certs/acme/test.crt").unwrap();
+        //        let cert = load_cert(host).await.unwrap();
+        let amap = self.certmap.pin_owned();
+        let cert = amap.get(&host.to_string()).unwrap();
 
-        let key = PKey::private_key_from_pem(&keyfile).unwrap();
-        ssl.set_private_key(&key).unwrap();
+        ssl.set_private_key(&cert.key).unwrap();
+        ssl.set_certificate(&cert.certs[0]).unwrap();
 
-        let certs = X509::stack_from_pem(&certfile).unwrap();
-        if certs.len() == 0 {
-            panic!("No certificates found in TLS .crt file");
-        }
-        ssl.set_certificate(&certs[0]).unwrap();
-
-        if certs.len() > 1 {
-            for c in certs[1..].iter() {
+        if cert.certs.len() > 1 {
+            for c in cert.certs[1..].iter() {
                 ssl.add_chain_cert(&c).unwrap();
             }
         }
@@ -72,7 +120,7 @@ fn main() -> Result<()> {
     let mut proxy = http_proxy_service(&server.configuration, Proxeny);
     proxy.add_tcp("0.0.0.0:8080");
 
-    let acc = Callbacks {};
+    let acc = Callbacks::new(Vec::from(TEST_HOSTS))?;
     let tls_settings = TlsSettings::with_callbacks(Box::new(acc))?;
 
     proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
