@@ -1,14 +1,83 @@
 
-use async_trait::async_trait;
-use pingora::{http::RequestHeader, prelude::HttpPeer, proxy::{http_proxy_service, ProxyHttp, Session}, server::Server, Result};
+use std::{fs::read, str::FromStr};
 
+use anyhow::Result;
+use async_trait::async_trait;
+use pingora::{
+    http::RequestHeader, listeners::{tls::TlsSettings, TlsAccept, TlsAcceptCallbacks}, prelude::HttpPeer, protocols::tls::TlsRef, proxy::{http_proxy_service, ProxyHttp, Session}, server::Server, tls::{pkey::PKey, ssl::NameType, x509::X509}
+};
+use tracing::info;
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::EnvFilter;
+
+struct Callbacks {}
+
+#[async_trait]
+impl TlsAccept for Callbacks {
+
+    // NOTE:This is all boringssl specific as pingora doesn't have
+    // support for dynamic certs with rustls.
+    async fn certificate_callback(&self, ssl: &mut TlsRef) -> () {
+        let host = ssl.servername(NameType::HOST_NAME)
+            .expect("No servername in TLS handshake");
+
+        info!("TLS Host is {host}; loading certs");
+
+        let keyfile = read("tests/data/certs/acme/test.key").unwrap();
+        let certfile = read("tests/data/certs/acme/test.crt").unwrap();
+
+        let key = PKey::private_key_from_pem(&keyfile).unwrap();
+        ssl.set_private_key(&key).unwrap();
+
+        let certs = X509::stack_from_pem(&certfile).unwrap();
+        if certs.len() == 0 {
+            panic!("No certificates found in TLS .crt file");
+        }
+        ssl.set_certificate(&certs[0]).unwrap();
+
+        if certs.len() > 1 {
+            for c in certs[1..].iter() {
+                ssl.add_chain_cert(&c).unwrap();
+            }
+        }
+    }
+
+}
+
+fn init_logging(level: &Option<String>) -> anyhow::Result<()> {
+    let lf = level.clone()
+        .map(|s| LevelFilter::from_str(&s).expect("Invalid log string"))
+        .unwrap_or(LevelFilter::INFO);
+
+    let env_log = EnvFilter::builder()
+        .with_default_directive(lf.into())
+        .from_env_lossy();
+
+    tracing_log::LogTracer::init()?;
+    let fmt = tracing_subscriber::fmt()
+        .with_env_filter(env_log)
+        .finish();
+    tracing::subscriber::set_global_default(fmt)?;
+
+    Ok(())
+}
 
 fn main() -> Result<()> {
+    init_logging(&Some("info".to_string()))?;
+    info!("Starting");
+
     let mut server = Server::new(None)?;
     server.bootstrap();
 
     let mut proxy = http_proxy_service(&server.configuration, Proxeny);
     proxy.add_tcp("0.0.0.0:8080");
+
+    let acc = Callbacks {};
+    let tls_settings = TlsSettings::with_callbacks(Box::new(acc))?;
+
+    proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
+
+//    proxy.add_tls("0.0.0.0:8443", "tests/data/certs/acme/test.crt", "tests/data/certs/acme/test.key")?;
 
     server.add_service(proxy);
 
@@ -25,27 +94,16 @@ impl ProxyHttp for Proxeny {
         ()
     }
 
-    async fn upstream_peer(
-        &self,
-        _session: &mut Session,
-        _ctx: &mut Self::CTX
-    ) -> Result<Box<HttpPeer>>
-    {
+    async fn upstream_peer(&self, _session: &mut Session, _ctx: &mut Self::CTX) -> pingora::Result<Box<HttpPeer>> {
         let peer = HttpPeer::new("192.168.42.201:5000", false, "frigate.haltcondition.net".to_string());
         Ok(Box::new(peer))
     }
 
-    async fn upstream_request_filter(
-        &self,
-        _session: &mut Session,
-        upstream_request: &mut RequestHeader,
-        _ctx: &mut Self::CTX,
-    ) -> Result<()>
+    async fn upstream_request_filter(&self, _session: &mut Session, upstream_request: &mut RequestHeader, _ctx: &mut Self::CTX) -> pingora::Result<()>
     where
         Self::CTX: Send + Sync,
     {
         upstream_request.insert_header("Host", "frigate.haltcondition.net")?;
         Ok(())
     }
-
 }
