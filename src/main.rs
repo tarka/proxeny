@@ -59,7 +59,7 @@ impl Callbacks {
                 let cert = from_files(k, c)?;
                 Ok((h.to_string(), cert))
             })
-            .collect::<Result<papaya::HashMap<_, _>>>()?;
+            .collect::<Result<_>>()?;
 
         info!("Loaded certificates");
 
