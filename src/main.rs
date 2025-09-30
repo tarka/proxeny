@@ -54,10 +54,10 @@ impl Callbacks {
         info!("Loading host certificates");
 
         let certmap = hosts.iter()
-            .map(|h| {
-                let (k, c) = load_cert_files(h)?;
-                let cert = from_files(k, c)?;
-                Ok((h.to_string(), cert))
+            .map(|host| {
+                let (key, cert) = load_cert_files(host)?;
+                let cert = from_files(key, cert)?;
+                Ok((host.to_string(), cert))
             })
             .collect::<Result<_>>()?;
 
@@ -71,8 +71,8 @@ impl Callbacks {
 #[async_trait]
 impl TlsAccept for Callbacks {
 
-    // NOTE:This is all boringssl specific as pingora doesn't have
-    // support for dynamic certs with rustls.
+    // NOTE:This is all boringssl specific as pingora doesn't
+    // currently support dynamic certs with rustls.
     async fn certificate_callback(&self, ssl: &mut TlsRef) -> () {
         let host = ssl.servername(NameType::HOST_NAME)
             .expect("No servername in TLS handshake");
@@ -117,29 +117,8 @@ fn init_logging(level: &Option<String>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
-    init_logging(&Some("info".to_string()))?;
-    info!("Starting");
-
-    let mut server = Server::new(None)?;
-    server.bootstrap();
-
-    let mut proxy = http_proxy_service(&server.configuration, Proxeny);
-    proxy.add_tcp("0.0.0.0:8080");
-
-    let acc = Callbacks::new(Vec::from(TEST_HOSTS))?;
-    let tls_settings = TlsSettings::with_callbacks(Box::new(acc))?;
-
-    proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
-
-//    proxy.add_tls("0.0.0.0:8443", "tests/data/certs/acme/test.crt", "tests/data/certs/acme/test.key")?;
-
-    server.add_service(proxy);
-
-    server.run_forever();
+struct Proxeny {
 }
-
-struct Proxeny;
 
 #[async_trait]
 impl ProxyHttp for Proxeny {
@@ -161,4 +140,25 @@ impl ProxyHttp for Proxeny {
         upstream_request.insert_header("Host", "frigate.haltcondition.net")?;
         Ok(())
     }
+}
+
+
+fn main() -> Result<()> {
+    init_logging(&Some("info".to_string()))?;
+    info!("Starting");
+
+    let mut server = Server::new(None)?;
+    server.bootstrap();
+
+    let mut proxy = http_proxy_service(&server.configuration, Proxeny {});
+    proxy.add_tcp("0.0.0.0:8080");
+
+    let acc = Callbacks::new(Vec::from(TEST_HOSTS))?;
+    let tls_settings = TlsSettings::with_callbacks(Box::new(acc))?;
+
+    proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
+
+    server.add_service(proxy);
+
+    server.run_forever();
 }
