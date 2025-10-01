@@ -63,7 +63,6 @@ impl CertStore {
 
         Ok(handler)
     }
-
 }
 
 impl CertHandler {
@@ -72,10 +71,6 @@ impl CertHandler {
             certstore
         }
     }
-}
-
-async fn do_nothing() -> usize {
-    1
 }
 
 #[async_trait]
@@ -89,12 +84,12 @@ impl TlsAccept for CertHandler {
 
         info!("TLS Host is {host}; loading certs");
 
-        // let amap = self.certstore.certmap.pin_owned();
-        // let cert = amap.get(&host.to_string())
-        //     .expect("Certificate for host not found");
-        let amap = self.certstore.certmap.pin();
-//        do_nothing().await;
-        let cert = amap.get(&host.to_string())
+        // FIXME: This should be a `get()` in CertStore, but papaya
+        // guard lifetimes make it pointless (we'd have to generate a
+        // guard here anyway). There may be another way to do it
+        // cleanly?
+        let pmap = self.certstore.certmap.pin();
+        let cert = pmap.get(&host.to_string())
             .expect("Certificate for host not found");
 
         ssl.set_private_key(&cert.key)
