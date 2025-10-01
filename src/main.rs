@@ -16,7 +16,7 @@ use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use crate::certificates::Callbacks;
+use crate::certificates::CertHandler;
 
 
 const TEST_HOSTS: [&str; 2] = ["dvalinn.haltcondition.net", "adguard.haltcondition.net"];
@@ -70,14 +70,19 @@ fn main() -> Result<()> {
     init_logging(&Some("info".to_string()))?;
     info!("Starting");
 
+
+    let cert_handler = CertHandler::new(Vec::from(TEST_HOSTS))?;
+    let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+
+    let proxeny = Proxeny {};
+
+
+
     let mut server = Server::new(None)?;
     server.bootstrap();
 
-    let mut proxy = http_proxy_service(&server.configuration, Proxeny {});
+    let mut proxy = http_proxy_service(&server.configuration, proxeny);
     proxy.add_tcp("0.0.0.0:8080");
-
-    let acc = Callbacks::new(Vec::from(TEST_HOSTS))?;
-    let tls_settings = TlsSettings::with_callbacks(Box::new(acc))?;
 
     proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
 

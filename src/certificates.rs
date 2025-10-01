@@ -13,7 +13,7 @@ struct HostCertificate {
     certs: Vec<X509>,
 }
 
-pub struct Callbacks {
+pub struct CertHandler {
     certmap: papaya::HashMap<String, HostCertificate>,
 }
 
@@ -37,7 +37,7 @@ fn from_files(keyfile: Vec<u8>, certfile: Vec<u8>) -> Result<HostCertificate> {
 }
 
 
-impl Callbacks {
+impl CertHandler {
     pub fn new(hosts: Vec<&str>) -> Result<Self> {
         info!("Loading host certificates");
 
@@ -49,15 +49,17 @@ impl Callbacks {
             })
             .collect::<Result<_>>()?;
 
-        info!("Loaded certificates");
+        let handler = CertHandler { certmap };
 
-        Ok(Callbacks { certmap })
+        info!("Loaded {} certificates", handler.certmap.len());
+
+        Ok(handler)
     }
 
 }
 
 #[async_trait]
-impl TlsAccept for Callbacks {
+impl TlsAccept for CertHandler {
 
     // NOTE:This is all boringssl specific as pingora doesn't
     // currently support dynamic certs with rustls.
@@ -67,7 +69,6 @@ impl TlsAccept for Callbacks {
 
         info!("TLS Host is {host}; loading certs");
 
-        //        let cert = load_cert(host).await.unwrap();
         let amap = self.certmap.pin_owned();
         let cert = amap.get(&host.to_string())
             .expect("Certificate for host not found");
