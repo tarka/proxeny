@@ -44,7 +44,6 @@ pub struct CertHandler {
     certstore: Arc<CertStore>,
 }
 
-
 impl CertStore {
     pub fn new(hosts: Vec<&str>) -> Result<Self> {
         info!("Loading host certificates");
