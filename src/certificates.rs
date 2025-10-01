@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use camino::Utf8PathBuf;
 use pingora::{listeners::TlsAccept, protocols::tls::TlsRef, tls::{pkey::{PKey, Private}, ssl::NameType, x509::X509}};
 use tracing::info;
 
@@ -16,21 +17,19 @@ struct HostCertificate {
 }
 
 
-fn load_cert_files(host: &str) -> Result<(Vec<u8>, Vec<u8>)> {
-    let keyfile = std::fs::read(format!("{TEST_DIR}/{host}.key"))?;
-    let certfile = std::fs::read(format!("{TEST_DIR}/{host}.crt"))?;
+fn load_cert_files(host: &str) -> Result<HostCertificate> {
+    let keyfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.key"));
+    let certfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.crt"));
+    let key = std::fs::read(&keyfile)?;
+    let cert = std::fs::read(&certfile)?;
 
-    Ok((keyfile, certfile))
-}
-
-fn from_files(keyfile: Vec<u8>, certfile: Vec<u8>) -> Result<HostCertificate> {
-    let key = PKey::private_key_from_pem(&keyfile)?;
-    let certs = X509::stack_from_pem(&certfile)?;
+    let key = PKey::private_key_from_pem(&key)?;
+    let certs = X509::stack_from_pem(&cert)?;
     if certs.is_empty() {
         bail!("No certificates found in TLS .crt file");
     }
 
-    let hostcert = HostCertificate { key, certs };
+    let hostcert = HostCertificate {key, certs,};
 
     Ok(hostcert)
 }
@@ -50,8 +49,7 @@ impl CertStore {
 
         let certmap = hosts.iter()
             .map(|host| {
-                let (key, cert) = load_cert_files(host)?;
-                let cert = from_files(key, cert)?;
+                let cert = load_cert_files(host)?;
                 Ok((host.to_string(), cert))
             })
             .collect::<Result<_>>()?;
