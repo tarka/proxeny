@@ -1,7 +1,7 @@
 
 mod certificates;
 
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, thread};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -10,7 +10,7 @@ use pingora::{
     listeners::tls::TlsSettings,
     prelude::HttpPeer,
     proxy::{http_proxy_service, ProxyHttp, Session},
-    server::Server,
+    server::{RunArgs, Server},
 };
 use tracing::info;
 use tracing::level_filters::LevelFilter;
@@ -72,22 +72,30 @@ fn main() -> Result<()> {
     info!("Starting");
 
     let certstore = Arc::new(CertStore::new(Vec::from(TEST_HOSTS))?);
+
     let cert_handler = CertHandler::new(certstore.clone());
     let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+    let proxeny = Proxeny { certstore: certstore.clone() };
 
-    let proxeny = Proxeny { certstore };
+    let server_handle = thread::spawn(move || -> Result<()> {
 
+        let mut server = Server::new(None)?;
+        server.bootstrap();
 
+        let mut proxy = http_proxy_service(&server.configuration, proxeny);
+        proxy.add_tcp("0.0.0.0:8080");
 
-    let mut server = Server::new(None)?;
-    server.bootstrap();
+        proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
 
-    let mut proxy = http_proxy_service(&server.configuration, proxeny);
-    proxy.add_tcp("0.0.0.0:8080");
+        server.add_service(proxy);
 
-    proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
+        server.run(RunArgs::default());
 
-    server.add_service(proxy);
+        Ok(())
+    });
 
-    server.run_forever();
+    server_handle.join()
+        .expect("Failed to finalise server")?;
+
+    Ok(())
 }
