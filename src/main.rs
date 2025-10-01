@@ -1,7 +1,7 @@
 
 mod certificates;
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use crate::certificates::CertHandler;
+use crate::certificates::{CertHandler, CertStore};
 
 
 const TEST_HOSTS: [&str; 2] = ["dvalinn.haltcondition.net", "adguard.haltcondition.net"];
@@ -41,6 +41,7 @@ fn init_logging(level: &Option<String>) -> anyhow::Result<()> {
 }
 
 struct Proxeny {
+    certstore: Arc<CertStore>,
 }
 
 #[async_trait]
@@ -70,11 +71,11 @@ fn main() -> Result<()> {
     init_logging(&Some("info".to_string()))?;
     info!("Starting");
 
-
-    let cert_handler = CertHandler::new(Vec::from(TEST_HOSTS))?;
+    let certstore = Arc::new(CertStore::new(Vec::from(TEST_HOSTS))?);
+    let cert_handler = CertHandler::new(certstore.clone());
     let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
 
-    let proxeny = Proxeny {};
+    let proxeny = Proxeny { certstore };
 
 
 

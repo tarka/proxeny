@@ -1,5 +1,7 @@
 
 
+use std::sync::Arc;
+
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use pingora::{listeners::TlsAccept, protocols::tls::TlsRef, tls::{pkey::{PKey, Private}, ssl::NameType, x509::X509}};
@@ -13,9 +15,6 @@ struct HostCertificate {
     certs: Vec<X509>,
 }
 
-pub struct CertHandler {
-    certmap: papaya::HashMap<String, HostCertificate>,
-}
 
 fn load_cert_files(host: &str) -> Result<(Vec<u8>, Vec<u8>)> {
     let keyfile = std::fs::read(format!("{TEST_DIR}/{host}.key"))?;
@@ -37,7 +36,16 @@ fn from_files(keyfile: Vec<u8>, certfile: Vec<u8>) -> Result<HostCertificate> {
 }
 
 
-impl CertHandler {
+pub struct CertStore {
+    certmap: papaya::HashMap<String, HostCertificate>,
+}
+
+pub struct CertHandler {
+    certstore: Arc<CertStore>,
+}
+
+
+impl CertStore {
     pub fn new(hosts: Vec<&str>) -> Result<Self> {
         info!("Loading host certificates");
 
@@ -49,13 +57,25 @@ impl CertHandler {
             })
             .collect::<Result<_>>()?;
 
-        let handler = CertHandler { certmap };
+        let handler = Self { certmap };
 
         info!("Loaded {} certificates", handler.certmap.len());
 
         Ok(handler)
     }
 
+}
+
+impl CertHandler {
+    pub fn new(certstore: Arc<CertStore>) -> Self {
+        Self {
+            certstore
+        }
+    }
+}
+
+async fn do_nothing() -> usize {
+    1
 }
 
 #[async_trait]
@@ -69,7 +89,11 @@ impl TlsAccept for CertHandler {
 
         info!("TLS Host is {host}; loading certs");
 
-        let amap = self.certmap.pin_owned();
+        // let amap = self.certstore.certmap.pin_owned();
+        // let cert = amap.get(&host.to_string())
+        //     .expect("Certificate for host not found");
+        let amap = self.certstore.certmap.pin();
+//        do_nothing().await;
         let cert = amap.get(&host.to_string())
             .expect("Certificate for host not found");
 
