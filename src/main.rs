@@ -2,10 +2,12 @@
 mod certificates;
 mod proxy;
 
+use std::sync::mpsc;
 use std::thread;
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
@@ -29,6 +31,28 @@ fn init_logging(level: &Option<String>) -> anyhow::Result<()> {
         .with_env_filter(env_log)
         .finish();
     tracing::subscriber::set_global_default(fmt)?;
+
+    Ok(())
+}
+
+fn watch_certs(certstore: &CertStore) -> Result<()> {
+    let files = certstore.file_list();
+
+    let (tx, rx) = mpsc::channel();
+    let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())?;
+
+    for f in files {
+        info!("Starting watch of {f}");
+        watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
+    }
+
+    for ev in rx {
+        match ev? {
+            Event { kind: EventKind::Modify(_), paths: paths, .. } => {
+            }
+            _ => panic!("")
+        }
+    }
 
     Ok(())
 }
