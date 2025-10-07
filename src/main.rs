@@ -46,16 +46,14 @@ fn main() -> Result<()> {
         Ok(())
     });
 
-    let watcher_handle = thread::spawn(move || -> Result<()> {
+    let _watcher_handle = thread::spawn(move || -> Result<()> {
         info!("Starting cert watcher");
-        watch_certs(certstore.clone())?;
+        watch_certs(certstore)?;
         Ok(())
     });
 
-    for task in [server_handle, watcher_handle] {
-        task.join()
-            .expect("Failed to finalise task")?;
-    }
+    server_handle.join()
+        .expect("Failed to finalise task")?;
 
     Ok(())
 }

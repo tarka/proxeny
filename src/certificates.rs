@@ -1,11 +1,12 @@
 
 
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use crossbeam_channel::{self as cbc, Receiver, Sender};
+use notify::{event::EventAttributes, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use pingora::{
     listeners::TlsAccept,
     protocols::tls::TlsRef,
@@ -103,7 +104,7 @@ impl CertStore {
 pub fn watch_certs(certstore: Arc<CertStore>) -> Result<()> {
     let files = certstore.file_list();
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = cbc::unbounded();
     let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())?;
 
     for f in files {
@@ -122,6 +123,7 @@ pub fn watch_certs(certstore: Arc<CertStore>) -> Result<()> {
             } => {
                 info!("Update: {k:?} -> {paths:?}");
             }
+
             Event {kind, paths, ..} => warn!("Unexpected update {kind:?} for {paths:?}")
         }
     }

@@ -401,6 +401,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-queue"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1073,6 +1082,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d3d07927151ff8575b7087f245456e549fea62edf0ec4e565a5ee50c8402bc3"
 dependencies = [
  "bitflags 2.9.4",
+ "crossbeam-channel",
  "fsevent-sys",
  "inotify",
  "kqueue",
@@ -1531,6 +1541,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "camino",
+ "crossbeam-channel",
  "notify",
  "papaya",
  "pingora",
