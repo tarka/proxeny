@@ -101,34 +101,68 @@ impl CertStore {
 }
 
 
-pub fn watch_certs(certstore: Arc<CertStore>) -> Result<()> {
-    let files = certstore.file_list();
+pub struct CertWatcher {
+    certstore: Arc<CertStore>,
+    tx: Sender<notify::Result<Event>>,
+    rx: Receiver<notify::Result<Event>>,
+}
 
-    let (tx, rx) = cbc::unbounded();
-    let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())?;
+const QUIT_STR: &str = "PROXENY_QUIT";
 
-    for f in files {
-        info!("Starting watch of {f}");
-        watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
+impl CertWatcher {
+    pub fn new(certstore: Arc<CertStore>) -> Self {
+        let (tx, rx) = cbc::unbounded();
+        Self {certstore, tx, rx}
     }
 
-    for ev in rx {
-        match ev? {
-            Event {
-                kind: k @ EventKind::Create(_)
-                    | k @ EventKind::Modify(_)
-                    | k @ EventKind::Remove(_),
-                paths,
-                ..
-            } => {
-                info!("Update: {k:?} -> {paths:?}");
-            }
+    pub fn watch(&self) -> Result<()> {
+        let files = self.certstore.file_list();
 
-            Event {kind, paths, ..} => warn!("Unexpected update {kind:?} for {paths:?}")
+        let mut watcher = RecommendedWatcher::new(self.tx.clone(), notify::Config::default())?;
+
+        for f in files {
+            info!("Starting watch of {f}");
+            watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
         }
+
+        for ev in &self.rx {
+            match ev? {
+                Event {
+                    kind: k @ EventKind::Create(_)
+                        | k @ EventKind::Modify(_)
+                        | k @ EventKind::Remove(_),
+                    paths,
+                    ..
+                } => {
+                    info!("Update: {k:?} -> {paths:?}");
+                }
+                Event { kind: EventKind::Other, attrs, .. }
+                if attrs.info() == Some(QUIT_STR) => {
+                    info!("Quitting certificate watcher loop.");
+                    break;
+                }
+                Event {kind, paths, ..} => warn!("Unexpected update {kind:?} for {paths:?}")
+            }
+        }
+
+        Ok(())
     }
 
-    Ok(())
+    pub fn quit(&self) -> Result<()> {
+        // Repurpose notify Event attributes to signal shutdown. This
+        // is slightly hacky and could be done via a second channel
+        // and select! instead, but this works well enough.
+        let mut attrs = EventAttributes::new();
+        attrs.set_info(QUIT_STR);
+        let quit = Event {
+            kind: EventKind::Other,
+            paths: Vec::new(),
+            attrs,
+        };
+        self.tx.send(Ok(quit))?;
+        Ok(())
+    }
+
 }
 
 

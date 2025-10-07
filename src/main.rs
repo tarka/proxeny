@@ -10,7 +10,7 @@ use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use crate::certificates::{watch_certs, CertStore};
+use crate::certificates::{CertStore, CertWatcher};
 
 const TEST_HOSTS: [&str; 2] = ["dvalinn.haltcondition.net", "adguard.haltcondition.net"];
 
@@ -38,6 +38,7 @@ fn main() -> Result<()> {
     info!("Starting");
 
     let certstore = Arc::new(CertStore::new(Vec::from(TEST_HOSTS))?);
+    let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 
     let certstore_server = certstore.clone();
     let server_handle = thread::spawn(move || -> Result<()> {
@@ -46,14 +47,20 @@ fn main() -> Result<()> {
         Ok(())
     });
 
-    let _watcher_handle = thread::spawn(move || -> Result<()> {
+    let cwc = certwatcher.clone();
+    let watcher_handle = thread::spawn(move || -> Result<()> {
         info!("Starting cert watcher");
-        watch_certs(certstore)?;
+        cwc.watch()?;
         Ok(())
     });
 
     server_handle.join()
-        .expect("Failed to finalise task")?;
+        .expect("Failed to finalise server task")?;
 
+    certwatcher.quit()?;
+    watcher_handle.join()
+        .expect("Failed to finalise watcher task")?;
+
+    info!("Proxeny finished.");
     Ok(())
 }
