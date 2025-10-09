@@ -123,7 +123,7 @@ pub struct CertWatcher {
 impl CertWatcher {
     pub fn new(certstore: Arc<CertStore>) -> Self {
         let (tx, rx) = cbc::unbounded();
-        let (q_tx, q_rx) = cbc::unbounded();
+        let (q_tx, q_rx) = cbc::bounded(1);
         Self {certstore, tx, rx, q_tx, q_rx}
     }
 
