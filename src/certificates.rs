@@ -6,10 +6,12 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use crossbeam_channel::{
-    self as cbc, Receiver, Select, Sender
+    self as cbc,
+    select,
+    Receiver,
+    Sender
 };
 use notify::{
-    event::EventAttributes,
     Event,
     EventKind,
     RecommendedWatcher,
@@ -118,8 +120,6 @@ pub struct CertWatcher {
     q_rx: Receiver<()>,
 }
 
-const QUIT_STR: &str = "PROXENY_QUIT";
-
 impl CertWatcher {
     pub fn new(certstore: Arc<CertStore>) -> Self {
         let (tx, rx) = cbc::unbounded();
@@ -136,58 +136,35 @@ impl CertWatcher {
             watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
         }
 
-        let mut select = Select::new();
-        let _s_notify = select.recv(&self.rx);
-        let s_quit = select.recv(&self.q_rx);
-
         loop {
-            let selected = select.select();
-            let nchan = selected.index();
-            println!("nchan = {nchan}");
-
-            if nchan == s_quit {
-                info!("Quitting certificate watcher loop.");
-                selected.recv(&self.q_rx)?;
-                break;
-            }
-
-            let ev = selected.recv(&self.rx)?;
-
-//        for ev in &self.rx {
-            match ev? {
-                Event {
-                    kind: k @ EventKind::Create(_)
-                        | k @ EventKind::Modify(_)
-                        | k @ EventKind::Remove(_),
-                    paths,
-                    ..
-                } => {
-                    info!("Update: {k:?} -> {paths:?}");
+            select! {
+                recv(&self.q_rx) -> _r => {
+                    info!("Quitting certificate watcher loop.");
+                    break;
+                },
+                recv(&self.rx) -> ev => {
+                    match ev?? {
+                        Event {
+                            kind: k @ EventKind::Create(_)
+                                | k @ EventKind::Modify(_)
+                                | k @ EventKind::Remove(_),
+                            paths,
+                            ..
+                        } => {
+                            info!("Update: {k:?} -> {paths:?}");
+                        }
+                        Event {kind, paths, ..} =>
+                            warn!("Unexpected update {kind:?} for {paths:?}")
+                    }
                 }
-                // Event { kind: EventKind::Other, attrs, .. }
-                // if attrs.info() == Some(QUIT_STR) => {
-                //     info!("Quitting certificate watcher loop.");
-                //     break;
-                // }
-                Event {kind, paths, ..} => warn!("Unexpected update {kind:?} for {paths:?}")
-            }
+            };
         }
 
         Ok(())
     }
 
     pub fn quit(&self) -> Result<()> {
-        // // Repurpose notify Event attributes to signal shutdown. This
-        // // is slightly hacky and could be done via a second channel
-        // // and select! instead, but this works well enough.
-        // let mut attrs = EventAttributes::new();
-        // attrs.set_info(QUIT_STR);
-        // let quit = Event {
-        //     kind: EventKind::Other,
-        //     paths: Vec::new(),
-        //     attrs,
-        // };
-        // self.tx.send(Ok(quit))?;
+        info!("Sending watcher quit signal");
         self.q_tx.send(())?;
         Ok(())
     }
