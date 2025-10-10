@@ -1,6 +1,6 @@
 
 
-use std::{sync::Arc, time::Duration};
+use std::{sync::{Arc, RwLock}, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -51,7 +51,7 @@ impl HostCertificate {
         let (key, certs) = load_cert_files(&keyfile, &certfile)?;
 
         Ok(HostCertificate {
-            host: host.to_owned(),
+            host,
             keyfile,
             key,
             certfile,
@@ -94,33 +94,38 @@ fn load_cert_files(keyfile: &Utf8PathBuf, certfile: &Utf8PathBuf) -> Result<(PKe
 }
 
 
-
 pub struct CertStore {
-    by_host: papaya::HashMap<String, Arc<HostCertificate>>,
-    by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
+    by_host: papaya::HashMap<String, Arc<RwLock<HostCertificate>>>,
+    by_file: papaya::HashMap<Utf8PathBuf, Arc<RwLock<HostCertificate>>>,
 }
 
 impl CertStore {
     pub fn new(hosts: Vec<&str>) -> Result<Self> {
         info!("Loading host certificates");
 
-        let certs: Vec<Arc<HostCertificate>> = hosts.iter()
+        let certs: Vec<Arc<RwLock<HostCertificate>>> = hosts.iter()
             .map(|host| {
-                let cert = load_host_certs(host)?;
-                Ok(Arc::new(cert))
+                let host = load_host_certs(host)?;
+                Ok(Arc::new(RwLock::new(host)))
             })
             .collect::<Result<_>>()?;
 
         let by_host = certs.iter()
-            .map(|cert| (cert.host.clone(), cert.clone()))
+            .map(|cert| (cert.read().expect("Failed to read cert; this shouldn't happen")
+                         .host.clone(),
+                         cert.clone()))
             .collect();
 
         let by_file = certs.iter()
-            .flat_map(|cert| vec!(
-                (cert.keyfile.clone(), cert.clone()),
-                (cert.certfile.clone(), cert.clone()),
-            ))
+            .flat_map(|cert| {
+                let hc = cert.read().expect("Failed to read cert; this shouldn't happen");
+                vec!(
+                    (hc.keyfile.clone(), cert.clone()),
+                    (hc.certfile.clone(), cert.clone()),
+                )
+            })
             .collect();
+
 
         let certstore = Self {
             by_host,
@@ -202,7 +207,7 @@ impl CertWatcher {
                     .expect("Unexpected cert path: {up}")
                     .clone()
             })
-            .collect::<Vec<Arc<HostCertificate>>>();
+            .collect::<Vec<Arc<RwLock<HostCertificate>>>>();
 
         for ev in matching {
             info!("EV: {ev:?}");
@@ -249,7 +254,9 @@ impl TlsAccept for CertHandler {
         // cleanly?
         let pmap = self.certstore.by_host.pin();
         let cert = pmap.get(&host.to_string())
-            .expect("Certificate for host not found");
+            .expect("Certificate for host not found")
+            .read()
+            .expect("Unable to acquire readlock for host");
 
         ssl.set_private_key(&cert.key)
             .expect("Failed to set private key");
