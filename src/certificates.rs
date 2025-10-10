@@ -13,13 +13,14 @@ use crossbeam_channel::{
 };
 use itertools::Itertools;
 use notify::{
-    Event,
     EventKind,
-    RecommendedWatcher,
     RecursiveMode,
-    Watcher
 };
-use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
+use notify_debouncer_full::{
+    self as debouncer,
+    DebounceEventResult,
+    DebouncedEvent,
+};
 use pingora::{
     listeners::TlsAccept,
     protocols::tls::TlsRef,
@@ -44,31 +45,54 @@ struct HostCertificate {
     certs: Vec<X509>,
 }
 
-fn load_cert_files(host: &str) -> Result<HostCertificate> {
+impl HostCertificate {
+
+    fn new(host: String, keyfile: Utf8PathBuf, certfile: Utf8PathBuf) -> Result<Self> {
+        let (key, certs) = load_cert_files(&keyfile, &certfile)?;
+
+        Ok(HostCertificate {
+            host: host.to_owned(),
+            keyfile,
+            key,
+            certfile,
+            certs,
+        })
+    }
+
+    fn reload(&mut self) -> Result<()> {
+        info!("Reloading TLS certificate files for {}", self.host);
+        let (key, certs) = load_cert_files(&self.keyfile, &self.certfile)?;
+        self.key = key;
+        self.certs = certs;
+        Ok(())
+    }
+}
+
+fn load_host_certs(host: &str) -> Result<HostCertificate> {
     // FIXME
     let keyfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.key"))
         .canonicalize_utf8()?;
     let certfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.crt"))
         .canonicalize_utf8()?;
-    let key = std::fs::read(&keyfile)?;
-    let cert = std::fs::read(&certfile)?;
+
+    let hostcert = HostCertificate::new(host.to_owned(),
+                                        keyfile, certfile)?;
+
+    Ok(hostcert)
+}
+
+fn load_cert_files(keyfile: &Utf8PathBuf, certfile: &Utf8PathBuf) -> Result<(PKey<Private>, Vec<X509>)> {
+    let key = std::fs::read(keyfile)?;
+    let cert = std::fs::read(certfile)?;
 
     let key = PKey::private_key_from_pem(&key)?;
     let certs = X509::stack_from_pem(&cert)?;
     if certs.is_empty() {
         bail!("No certificates found in TLS .crt file");
     }
-
-    let hostcert = HostCertificate {
-        host: host.to_owned(),
-        keyfile,
-        key,
-        certfile,
-        certs,
-    };
-
-    Ok(hostcert)
+    Ok((key, certs))
 }
+
 
 
 pub struct CertStore {
@@ -82,7 +106,7 @@ impl CertStore {
 
         let certs: Vec<Arc<HostCertificate>> = hosts.iter()
             .map(|host| {
-                let cert = load_cert_files(host)?;
+                let cert = load_host_certs(host)?;
                 Ok(Arc::new(cert))
             })
             .collect::<Result<_>>()?;
