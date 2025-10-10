@@ -263,9 +263,9 @@ impl TlsAccept for CertHandler {
         let cert = pmap.get(&host.to_string())
             .expect("Certificate for host not found");
 
-
         ssl.set_private_key(&cert.key)
             .expect("Failed to set private key");
+        info!("Certificate found: {:?}, expires {}", cert.certs[0].subject_name(), cert.certs[0].not_after());
         ssl.set_certificate(&cert.certs[0])
             .expect("Failed to set certificate");
 
