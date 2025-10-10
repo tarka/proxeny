@@ -214,10 +214,6 @@ impl CertWatcher {
             .collect::<Vec<Arc<HostCertificate>>>();
 
         for cert in certs {
-            // let mut lock = cert.write().expect("Failed to lock cert");
-            // info!("Reloading certs for host {}", lock.host);
-            // lock.reload()?;
-            //fn new(host: String, keyfile: Utf8PathBuf, certfile: Utf8PathBuf) -> Result<Self> {
             let newcert = Arc::new(HostCertificate::new(cert.host.clone(),
                                                         cert.keyfile.clone(),
                                                         cert.certfile.clone())?);
