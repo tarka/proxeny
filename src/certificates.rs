@@ -1,6 +1,6 @@
 
 
-use std::{sync::{Arc, RwLock}, time::Duration};
+use std::{error::Error, sync::{Arc, RwLock}, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -191,7 +191,7 @@ impl CertWatcher {
     }
 
     fn process_events(&self, events: Vec<DebouncedEvent>) -> Result<()> {
-        let matching = events.into_iter()
+        let certs = events.into_iter()
             .filter(|dev| matches!(dev.event.kind,
                                    EventKind::Create(_)
                                    | EventKind::Modify(_)
@@ -209,8 +209,10 @@ impl CertWatcher {
             })
             .collect::<Vec<Arc<RwLock<HostCertificate>>>>();
 
-        for ev in matching {
-            info!("EV: {ev:?}");
+        for cert in certs {
+            let mut lock = cert.write().expect("Failed to lock cert");
+            info!("Reloading certs for host {}", lock.host);
+            lock.reload()?;
         }
 
         Ok(())
