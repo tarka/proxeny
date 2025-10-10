@@ -8,7 +8,9 @@ anyhow = "1.0.100"
 async-trait = "0.1.89"
 camino = "1.2.1"
 crossbeam-channel = "0.5.15"
+itertools = "0.14.0"
 notify = { version = "8.2.0", default-features = false, features = ["crossbeam-channel", "fsevent-sys"] }
+notify-debouncer-full = { version = "0.6.0", default-features = false, features = ["crossbeam-channel"] }
 papaya = "0.2.3"
 pingora = { version = "0.6.0", default-features = false, features = ["boringssl", "proxy"] }
 tracing = "0.1.41"

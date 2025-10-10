@@ -1,6 +1,6 @@
 
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -11,6 +11,7 @@ use crossbeam_channel::{
     Receiver,
     Sender
 };
+use itertools::Itertools;
 use notify::{
     Event,
     EventKind,
@@ -18,6 +19,7 @@ use notify::{
     RecursiveMode,
     Watcher
 };
+use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
 use pingora::{
     listeners::TlsAccept,
     protocols::tls::TlsRef,
@@ -33,6 +35,7 @@ use tracing::{info, warn};
 // FIXME: Move to config
 const TEST_DIR: &str = "tests/data/certs/acme";
 
+#[derive(Debug)]
 struct HostCertificate {
     host: String,
     keyfile: Utf8PathBuf,
@@ -43,8 +46,10 @@ struct HostCertificate {
 
 fn load_cert_files(host: &str) -> Result<HostCertificate> {
     // FIXME
-    let keyfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.key"));
-    let certfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.crt"));
+    let keyfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.key"))
+        .canonicalize_utf8()?;
+    let certfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.crt"))
+        .canonicalize_utf8()?;
     let key = std::fs::read(&keyfile)?;
     let cert = std::fs::read(&certfile)?;
 
@@ -112,10 +117,12 @@ impl CertStore {
 }
 
 
+const RELOAD_GRACE: Duration = Duration::from_secs(2);
+
 pub struct CertWatcher {
     certstore: Arc<CertStore>,
-    tx: Sender<notify::Result<Event>>,
-    rx: Receiver<notify::Result<Event>>,
+    tx: Sender<DebounceEventResult>,
+    rx: Receiver<DebounceEventResult>,
     q_tx: Sender<()>,
     q_rx: Receiver<()>,
 }
@@ -130,10 +137,10 @@ impl CertWatcher {
     pub fn watch(&self) -> Result<()> {
         let files = self.certstore.file_list();
 
-        let mut watcher = RecommendedWatcher::new(self.tx.clone(), notify::Config::default())?;
+        let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, self.tx.clone())?;
         for f in files {
             info!("Starting watch of {f}");
-            watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
+            watcher.watch(f, RecursiveMode::NonRecursive)?;
         }
 
         loop {
@@ -142,22 +149,39 @@ impl CertWatcher {
                     info!("Quitting certificate watcher loop.");
                     break;
                 },
-                recv(&self.rx) -> ev => {
-                    match ev?? {
-                        Event {
-                            kind: k @ EventKind::Create(_)
-                                | k @ EventKind::Modify(_)
-                                | k @ EventKind::Remove(_),
-                            paths,
-                            ..
-                        } => {
-                            info!("Update: {k:?} -> {paths:?}");
-                        }
-                        Event {kind, paths, ..} =>
-                            warn!("Unexpected update {kind:?} for {paths:?}")
+                recv(&self.rx) -> events => {
+                    match events? {
+                        Err(errs) => warn!("Received errors from cert watcher: {errs:#?}"),
+                        Ok(evs) => self.process_events(evs)?,
                     }
                 }
             };
+        }
+
+        Ok(())
+    }
+
+    fn process_events(&self, events: Vec<DebouncedEvent>) -> Result<()> {
+        let matching = events.into_iter()
+            .filter(|dev| matches!(dev.event.kind,
+                                   EventKind::Create(_)
+                                   | EventKind::Modify(_)
+                                   | EventKind::Remove(_)))
+            .flat_map(|dev| dev.paths.clone())
+            .unique()
+            .map(|path| {
+                let up = Utf8PathBuf::from_path_buf(path)
+                    .expect("Invalid path encoding: {path}")
+                    .canonicalize_utf8()
+                    .expect("Invalid UTF8 path: {path}");
+                self.certstore.by_file.pin().get(&up)
+                    .expect("Unexpected cert path: {up}")
+                    .clone()
+            })
+            .collect::<Vec<Arc<HostCertificate>>>();
+
+        for ev in matching {
+            info!("EV: {ev:?}");
         }
 
         Ok(())
