@@ -1,5 +1,6 @@
 
 mod certificates;
+mod config;
 mod proxy;
 
 use std::thread;
