@@ -119,6 +119,22 @@ mod tests {
         assert_eq!("adguard.haltcondition.net", config.servers[0].hostname);
         assert_eq!("htpc.haltcondition.net", config.servers[1].hostname);
 
+        assert!(matches!(&config.servers[0].tls, TlsConfigType::Files(
+            TlsFilesConfig {
+                keyfile: _,  // FIXME: Match Utf8PathBuf?
+                certfile: _,
+                reload: true,
+            })));
+
+        assert!(matches!(config.servers[1].tls, TlsConfigType::Acme(
+            TlsAcmeConfig {
+                provider: AcmeProvider::LetsEncrypt,
+                challenge_type: AcmeChallenge::Dns01,
+                contact: _,  // FIXME: Match String?
+                dns_provider: DnsProvider::DnSimple(_),
+            },
+        )));
+
         Ok(())
     }
 }
