@@ -5,19 +5,44 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use pingora::{listeners::TlsAccept, protocols::tls::TlsRef, tls::{pkey::{PKey, Private}, ssl::NameType, x509::X509}};
-use tracing::info;
+use crossbeam_channel::{
+    self as cbc,
+    select,
+    Receiver,
+    Sender
+};
+use notify::{
+    Event,
+    EventKind,
+    RecommendedWatcher,
+    RecursiveMode,
+    Watcher
+};
+use pingora::{
+    listeners::TlsAccept,
+    protocols::tls::TlsRef,
+    tls::{
+        pkey::{PKey, Private},
+        ssl::NameType,
+        x509::X509
+    }
+};
+use tracing::{info, warn};
 
 
+// FIXME: Move to config
 const TEST_DIR: &str = "tests/data/certs/acme";
 
 struct HostCertificate {
+    host: String,
+    keyfile: Utf8PathBuf,
     key: PKey<Private>,
+    certfile: Utf8PathBuf,
     certs: Vec<X509>,
 }
 
-
 fn load_cert_files(host: &str) -> Result<HostCertificate> {
+    // FIXME
     let keyfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.key"));
     let certfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.crt"));
     let key = std::fs::read(&keyfile)?;
@@ -29,37 +54,126 @@ fn load_cert_files(host: &str) -> Result<HostCertificate> {
         bail!("No certificates found in TLS .crt file");
     }
 
-    let hostcert = HostCertificate {key, certs,};
+    let hostcert = HostCertificate {
+        host: host.to_owned(),
+        keyfile,
+        key,
+        certfile,
+        certs,
+    };
 
     Ok(hostcert)
 }
 
 
 pub struct CertStore {
-    certmap: papaya::HashMap<String, HostCertificate>,
-}
-
-pub struct CertHandler {
-    certstore: Arc<CertStore>,
+    by_host: papaya::HashMap<String, Arc<HostCertificate>>,
+    by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
 }
 
 impl CertStore {
     pub fn new(hosts: Vec<&str>) -> Result<Self> {
         info!("Loading host certificates");
 
-        let certmap = hosts.iter()
+        let certs: Vec<Arc<HostCertificate>> = hosts.iter()
             .map(|host| {
                 let cert = load_cert_files(host)?;
-                Ok((host.to_string(), cert))
+                Ok(Arc::new(cert))
             })
             .collect::<Result<_>>()?;
 
-        let handler = Self { certmap };
+        let by_host = certs.iter()
+            .map(|cert| (cert.host.clone(), cert.clone()))
+            .collect();
 
-        info!("Loaded {} certificates", handler.certmap.len());
+        let by_file = certs.iter()
+            .flat_map(|cert| vec!(
+                (cert.keyfile.clone(), cert.clone()),
+                (cert.certfile.clone(), cert.clone()),
+            ))
+            .collect();
 
-        Ok(handler)
+        let certstore = Self {
+            by_host,
+            by_file
+        };
+
+        info!("Loaded {} certificates", certs.len());
+
+        Ok(certstore)
     }
+
+    pub fn file_list(&self) -> Vec<Utf8PathBuf> {
+        self.by_file.pin()
+            .keys()
+            .cloned()
+            .collect()
+    }
+}
+
+
+pub struct CertWatcher {
+    certstore: Arc<CertStore>,
+    tx: Sender<notify::Result<Event>>,
+    rx: Receiver<notify::Result<Event>>,
+    q_tx: Sender<()>,
+    q_rx: Receiver<()>,
+}
+
+impl CertWatcher {
+    pub fn new(certstore: Arc<CertStore>) -> Self {
+        let (tx, rx) = cbc::unbounded();
+        let (q_tx, q_rx) = cbc::unbounded();
+        Self {certstore, tx, rx, q_tx, q_rx}
+    }
+
+    pub fn watch(&self) -> Result<()> {
+        let files = self.certstore.file_list();
+
+        let mut watcher = RecommendedWatcher::new(self.tx.clone(), notify::Config::default())?;
+        for f in files {
+            info!("Starting watch of {f}");
+            watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
+        }
+
+        loop {
+            select! {
+                recv(&self.q_rx) -> _r => {
+                    info!("Quitting certificate watcher loop.");
+                    break;
+                },
+                recv(&self.rx) -> ev => {
+                    match ev?? {
+                        Event {
+                            kind: k @ EventKind::Create(_)
+                                | k @ EventKind::Modify(_)
+                                | k @ EventKind::Remove(_),
+                            paths,
+                            ..
+                        } => {
+                            info!("Update: {k:?} -> {paths:?}");
+                        }
+                        Event {kind, paths, ..} =>
+                            warn!("Unexpected update {kind:?} for {paths:?}")
+                    }
+                }
+            };
+        }
+
+        Ok(())
+    }
+
+    pub fn quit(&self) -> Result<()> {
+        info!("Sending watcher quit signal");
+        self.q_tx.send(())?;
+        Ok(())
+    }
+
+}
+
+
+pub struct CertHandler {
+    certstore: Arc<CertStore>,
 }
 
 impl CertHandler {
@@ -85,7 +199,7 @@ impl TlsAccept for CertHandler {
         // guard lifetimes make it pointless (we'd have to generate a
         // guard here anyway). There may be another way to do it
         // cleanly?
-        let pmap = self.certstore.certmap.pin();
+        let pmap = self.certstore.by_host.pin();
         let cert = pmap.get(&host.to_string())
             .expect("Certificate for host not found");
 
