@@ -1,0 +1,41 @@
+
+let {
+  $acme_default = {
+    provider = "letsencrypt"
+    challenge_type = "dns-01"
+    contact = "tarkasteve@gmail.com"
+    dns_provider.dnsimple = {
+      key = "fhsa-9fhahsodfhajlj"
+      account_id = 5432
+    }
+  }
+
+}  in {
+
+  servers = [
+
+    {
+      hostname = "adguard.haltcondition.net"
+      tls = {
+        files = {
+          keyfile = "/etc/ssl/certs/adguard.haltcondition.net.key"
+          certfile = "/etc/ssl/certs/adguard.haltcondition.net.crt"
+          reload = true
+        }
+      }
+      backend = {
+        url = "http://localhost:8080"
+      }
+    }
+
+    {
+      hostname = "htpc.haltcondition.net"
+      tls = {
+        acme = $acme_default
+      }
+      backend = {
+        url = "http://localhost:8080"
+      }
+    }
+  ]
+}
