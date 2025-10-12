@@ -1,5 +1,6 @@
 
 let {
+  // The default ACME provider for DNS-01 verification.
   $acme_default = {
     provider = "letsencrypt"
     challenge_type = "dns-01"
@@ -14,6 +15,7 @@ let {
 
   servers = [
 
+    // Adguard Incus container
     {
       hostname = "adguard.haltcondition.net"
       tls = {
@@ -28,6 +30,7 @@ let {
       }
     }
 
+    // HTPC machine, hosts multiple services in contexts
     {
       hostname = "htpc.haltcondition.net"
       tls = {
