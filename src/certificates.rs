@@ -29,7 +29,7 @@ use pingora::{
 };
 use tracing::{debug, info, warn};
 
-use crate::{config::{Config, TlsConfigType}};
+use crate::config::{Config, TlsConfigType, TlsFilesConfig};
 
 
 struct HostCertificate {
@@ -52,10 +52,32 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
     Ok((key, certs))
 }
 
+fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
+    // We only watch user-supplied certs that are flagged to
+    // reload. Acme certs are ignored.
+    config.servers.iter()
+        .filter_map(|s| match &s.tls {
+            TlsConfigType::Files(TlsFilesConfig {keyfile, certfile, reload: true}) => {
+//            TlsConfigType::Files(tfc) => {
+                Some(vec![
+                    keyfile.clone(),
+                    certfile.clone(),
+                ])
+            }
+            _ => None
+        })
+        .flatten()
+        .collect()
+
+}
 
 pub struct CertStore {
     by_host: papaya::HashMap<String, Arc<HostCertificate>>,
     by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
+    // Watched files; this may be a subset of all files as some are
+    // unwatched, either by configuration or policy
+    // (i.e. acme-generated).
+    watchlist: Vec<Utf8PathBuf>,
 }
 
 impl CertStore {
@@ -92,9 +114,12 @@ impl CertStore {
             ))
             .collect();
 
+        let watchlist = gen_watchlist(config);
+
         let certstore = Self {
             by_host,
-            by_file
+            by_file,
+            watchlist,
         };
 
         info!("Loaded {} certificates", certs.len());
@@ -102,12 +127,6 @@ impl CertStore {
         Ok(certstore)
     }
 
-    pub fn file_list(&self) -> Vec<Utf8PathBuf> {
-        self.by_file.pin()
-            .keys()
-            .cloned()
-            .collect()
-    }
 }
 
 
@@ -127,10 +146,9 @@ impl CertWatcher {
     }
 
     pub fn watch(&self) -> Result<()> {
-        let files = self.certstore.file_list();
 
         let mut watcher = RecommendedWatcher::new(self.tx.clone(), notify::Config::default())?;
-        for f in files {
+        for f in &self.certstore.watchlist {
             info!("Starting watch of {f}");
             watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
         }
@@ -215,4 +233,53 @@ impl TlsAccept for CertHandler {
         }
     }
 
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use http::Uri;
+
+    use super::*;
+    use crate::config::{Backend, Server, TlsFilesConfig};
+
+
+    #[test]
+    fn test_watchlist_exclusion() -> Result<()> {
+        let config = Config {
+            servers: vec![
+                Server {
+                    hostname: "host1".to_owned(),
+                    tls: TlsConfigType::Files(TlsFilesConfig {
+                        keyfile: Utf8PathBuf::from("keyfile1.key"),
+                        certfile: Utf8PathBuf::from("certfile1.crt"),
+                        reload: true,
+                    }),
+                    backend: Backend {
+                        url: Uri::from_static("http://localhost")
+                    }
+                },
+                Server {
+                    hostname: "host2".to_owned(),
+                    tls: TlsConfigType::Files(TlsFilesConfig {
+                        keyfile: Utf8PathBuf::from("keyfile2.key"),
+                        certfile: Utf8PathBuf::from("certfile2.crt"),
+                        reload: false,
+                    }),
+                    backend: Backend {
+                        url: Uri::from_static("http://localhost")
+                    }
+                },
+            ]
+        };
+
+        let watchlist = gen_watchlist(&config);
+
+        assert_eq!(2, watchlist.len());
+        assert_eq!(Utf8PathBuf::from("keyfile1.key"), watchlist[0]);
+        assert_eq!(Utf8PathBuf::from("certfile1.crt"), watchlist[1]);
+
+        Ok(())
+    }
 }

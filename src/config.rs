@@ -87,7 +87,7 @@ pub enum TlsConfigType {
 #[derive(Debug, Deserialize)]
 pub struct Backend {
     #[serde(with = "http_serde::uri")]
-    url: Uri,
+    pub url: Uri,
 }
 
 #[derive(Debug, Deserialize)]
