@@ -1,6 +1,6 @@
 
 
-use std::sync::Arc;
+use std::{fs, sync::Arc};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -41,11 +41,11 @@ struct HostCertificate {
 }
 
 fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
-    let key = std::fs::read(keyfile)?;
-    let cert = std::fs::read(certfile)?;
+    let kdata = fs::read(keyfile)?;
+    let cdata = fs::read(certfile)?;
 
-    let key = PKey::private_key_from_pem(&key)?;
-    let certs = X509::stack_from_pem(&cert)?;
+    let key = PKey::private_key_from_pem(&kdata)?;
+    let certs = X509::stack_from_pem(&cdata)?;
     if certs.is_empty() {
         bail!("No certificates found in TLS .crt file");
     }
