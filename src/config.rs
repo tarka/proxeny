@@ -3,7 +3,7 @@ use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
 use http::Uri;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_default_utils::default_bool;
 
 #[derive(Clone, Debug, Parser)]
@@ -31,6 +31,20 @@ impl CliOptions {
         CliOptions::parse()
     }
 }
+
+
+
+fn deserialize_canonical<'de, D>(deserializer: D) -> std::result::Result<Utf8PathBuf, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let path = Utf8PathBuf::deserialize(deserializer)?;
+    // Attempt to turn into full path, but use the short version otherwise.
+    let cpath = path.canonicalize_utf8()
+        .unwrap_or(path);
+    Ok(cpath)
+}
+
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -71,7 +85,9 @@ pub struct TlsAcmeConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct TlsFilesConfig {
+    #[serde(deserialize_with = "deserialize_canonical")]
     pub keyfile: Utf8PathBuf,
+    #[serde(deserialize_with = "deserialize_canonical")]
     pub certfile: Utf8PathBuf,
     #[serde(default = "default_bool::<true>")]
     pub reload: bool,
@@ -116,6 +132,7 @@ impl Config {
 }
 
 pub fn read_config(file: &Utf8Path) -> Result<Config> {
+    println!("loading {file}");
     let key = std::fs::read_to_string(&file)?;
     let config = corn::from_str(&key)?;
     Ok(config)

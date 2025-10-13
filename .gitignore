@@ -1,5 +1,5 @@
 /target
-/tests/data/certs/acme/
+/tests/data/certs/external
 /.idea
 \#*\#
 /proxeny.corn
