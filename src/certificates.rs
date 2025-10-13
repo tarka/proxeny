@@ -1,6 +1,5 @@
 
-
-use std::{fs, sync::Arc};
+use std::{fs, sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -11,12 +10,15 @@ use crossbeam_channel::{
     Receiver,
     Sender
 };
+use itertools::Itertools;
 use notify::{
-    Event,
     EventKind,
-    RecommendedWatcher,
     RecursiveMode,
-    Watcher
+};
+use notify_debouncer_full::{
+    self as debouncer,
+    DebounceEventResult,
+    DebouncedEvent,
 };
 use pingora::{
     listeners::TlsAccept,
@@ -32,12 +34,28 @@ use tracing::{debug, info, warn};
 use crate::config::{Config, TlsConfigType, TlsFilesConfig};
 
 
+#[derive(Debug)]
 struct HostCertificate {
     host: String,
     keyfile: Utf8PathBuf,
     key: PKey<Private>,
     certfile: Utf8PathBuf,
     certs: Vec<X509>,
+}
+
+impl HostCertificate {
+    fn new(host: String, keyfile: Utf8PathBuf, certfile: Utf8PathBuf) -> Result<Self> {
+        let (key, certs) = load_certs(&keyfile, &certfile)?;
+
+        Ok(HostCertificate {
+            host,
+            keyfile,
+            key,
+            certfile,
+            certs,
+        })
+    }
+
 }
 
 fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
@@ -103,14 +121,15 @@ impl CertStore {
             .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
 
         let by_host = certs.iter()
-            .map(|cert| (cert.host.clone(), cert.clone()))
+            .map(|cert| (cert.host.clone(),
+                         cert.clone()))
             .collect();
 
         let by_file = certs.iter()
-            .flat_map(|cert| vec!(
-                (cert.keyfile.clone(), cert.clone()),
-                (cert.certfile.clone(), cert.clone()),
-            ))
+            .flat_map(|cert| {
+                vec!((cert.keyfile.clone(), cert.clone()),
+                     (cert.certfile.clone(), cert.clone()))
+            })
             .collect();
 
         let watchlist = gen_watchlist(config);
@@ -126,13 +145,36 @@ impl CertStore {
         Ok(certstore)
     }
 
+    fn replace(&self, newcert: Arc<HostCertificate>) -> Result<()> {
+        let host = newcert.host.clone();
+        info!("Replacing certificate for {host}");
+
+        self.by_host.pin().update(host, |_old| newcert.clone());
+
+        let by_file = self.by_file.pin();
+        let keyfile = newcert.keyfile.clone();
+        by_file.update(keyfile, |_old| newcert.clone());
+        let certfile = newcert.keyfile.clone();
+        by_file.update(certfile, |_old| newcert.clone());
+
+        Ok(())
+    }
+
+    pub fn file_list(&self) -> Vec<Utf8PathBuf> {
+        self.by_file.pin()
+            .keys()
+            .cloned()
+            .collect()
+    }
 }
 
 
+const RELOAD_GRACE: Duration = Duration::from_secs(2);
+
 pub struct CertWatcher {
     certstore: Arc<CertStore>,
-    tx: Sender<notify::Result<Event>>,
-    rx: Receiver<notify::Result<Event>>,
+    tx: Sender<DebounceEventResult>,
+    rx: Receiver<DebounceEventResult>,
     q_tx: Sender<()>,
     q_rx: Receiver<()>,
 }
@@ -140,16 +182,16 @@ pub struct CertWatcher {
 impl CertWatcher {
     pub fn new(certstore: Arc<CertStore>) -> Self {
         let (tx, rx) = cbc::unbounded();
-        let (q_tx, q_rx) = cbc::unbounded();
+        let (q_tx, q_rx) = cbc::bounded(1);
         Self {certstore, tx, rx, q_tx, q_rx}
     }
 
     pub fn watch(&self) -> Result<()> {
 
-        let mut watcher = RecommendedWatcher::new(self.tx.clone(), notify::Config::default())?;
+        let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, self.tx.clone())?;
         for f in &self.certstore.watchlist {
             info!("Starting watch of {f}");
-            watcher.watch(f.as_ref(), RecursiveMode::NonRecursive)?;
+            watcher.watch(f, RecursiveMode::NonRecursive)?;
         }
 
         loop {
@@ -158,22 +200,42 @@ impl CertWatcher {
                     info!("Quitting certificate watcher loop.");
                     break;
                 },
-                recv(&self.rx) -> ev => {
-                    match ev?? {
-                        Event {
-                            kind: k @ EventKind::Create(_)
-                                | k @ EventKind::Modify(_)
-                                | k @ EventKind::Remove(_),
-                            paths,
-                            ..
-                        } => {
-                            info!("Update: {k:?} -> {paths:?}");
-                        }
-                        Event {kind, paths, ..} =>
-                            warn!("Unexpected update {kind:?} for {paths:?}")
+                recv(&self.rx) -> events => {
+                    match events? {
+                        Err(errs) => warn!("Received errors from cert watcher: {errs:#?}"),
+                        Ok(evs) => self.process_events(evs)?,
                     }
                 }
             };
+        }
+
+        Ok(())
+    }
+
+    fn process_events(&self, events: Vec<DebouncedEvent>) -> Result<()> {
+        let certs = events.into_iter()
+            .filter(|dev| matches!(dev.event.kind,
+                                   EventKind::Create(_)
+                                   | EventKind::Modify(_)
+                                   | EventKind::Remove(_)))
+            .flat_map(|dev| dev.paths.clone())
+            .unique()
+            .map(|path| {
+                let up = Utf8PathBuf::from_path_buf(path)
+                    .expect("Invalid path encoding: {path}")
+                    .canonicalize_utf8()
+                    .expect("Invalid UTF8 path: {path}");
+                self.certstore.by_file.pin().get(&up)
+                    .expect("Unexpected cert path: {up}")
+                    .clone()
+            })
+            .collect::<Vec<Arc<HostCertificate>>>();
+
+        for cert in certs {
+            let newcert = Arc::new(HostCertificate::new(cert.host.clone(),
+                                                        cert.keyfile.clone(),
+                                                        cert.certfile.clone())?);
+            self.certstore.replace(newcert)?;
         }
 
         Ok(())
@@ -221,6 +283,7 @@ impl TlsAccept for CertHandler {
 
         ssl.set_private_key(&cert.key)
             .expect("Failed to set private key");
+        info!("Certificate found: {:?}, expires {}", cert.certs[0].subject_name(), cert.certs[0].not_after());
         ssl.set_certificate(&cert.certs[0])
             .expect("Failed to set certificate");
 
