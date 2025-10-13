@@ -4,6 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::Deserialize;
+use serde_default_utils::default_bool;
 
 #[derive(Clone, Debug, Parser)]
 #[command(
@@ -21,13 +22,13 @@ pub struct CliOptions {
     /// Config file
     ///
     /// Override the config file location
-    #[arg(short = 'c', long, default_value = "/etc/proxeny/proxeny.toml")]
-    config: Utf8PathBuf,
+    #[arg(short = 'c', long)]
+    pub config_file: Option<Utf8PathBuf>,
 }
 
 impl CliOptions {
-    pub fn from_args() -> Result<CliOptions> {
-        Ok(CliOptions::parse())
+    pub fn from_args() -> CliOptions {
+        CliOptions::parse()
     }
 }
 
@@ -72,6 +73,7 @@ pub struct TlsAcmeConfig {
 pub struct TlsFilesConfig {
     pub keyfile: Utf8PathBuf,
     pub certfile: Utf8PathBuf,
+    #[serde(default = "default_bool::<true>")]
     pub reload: bool,
 }
 
@@ -100,7 +102,7 @@ pub struct Config {
     pub servers: Vec<Server>,
 }
 
-pub fn parse_config(file: &Utf8Path) -> Result<Config> {
+pub fn read_config(file: &Utf8Path) -> Result<Config> {
     let key = std::fs::read_to_string(&file)?;
     let config = corn::from_str(&key)?;
     Ok(config)
@@ -114,7 +116,7 @@ mod tests {
     #[test]
     fn test_example_config() -> Result<()> {
         let file = Utf8PathBuf::from("examples/proxeny.corn");
-        let config = parse_config(&file)?;
+        let config = read_config(&file)?;
         assert_eq!(2, config.servers.len());
         assert_eq!("adguard.haltcondition.net", config.servers[0].hostname);
         assert_eq!("htpc.haltcondition.net", config.servers[1].hostname);
@@ -137,4 +139,24 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_no_optionals() -> Result<()> {
+        let file = Utf8PathBuf::from("tests/data/config/no-optionals.corn");
+        let config = read_config(&file)?;
+        assert_eq!(2, config.servers.len());
+        assert_eq!("host01.example.com", config.servers[0].hostname);
+        assert_eq!("host02.example.com", config.servers[1].hostname);
+
+        assert!(matches!(&config.servers[0].tls, TlsConfigType::Files(
+            TlsFilesConfig {
+                keyfile: _,
+                certfile: _,
+                reload: true,
+            })));
+
+        Ok(())
+    }
+
+
 }

@@ -4,9 +4,10 @@ mod config;
 mod proxy;
 
 use std::thread;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
+use camino::Utf8PathBuf;
 use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
@@ -15,14 +16,16 @@ use crate::certificates::{CertStore, CertWatcher};
 
 const TEST_HOSTS: [&str; 2] = ["dvalinn.haltcondition.net", "adguard.haltcondition.net"];
 
-
-fn init_logging(level: &Option<String>) -> anyhow::Result<()> {
-    let lf = level.clone()
-        .map(|s| LevelFilter::from_str(&s).expect("Invalid log string"))
-        .unwrap_or(LevelFilter::INFO);
+fn init_logging(level: u8) -> anyhow::Result<()> {
+    let log_level = match level {
+        0 => LevelFilter::WARN,
+        1 => LevelFilter::INFO,
+        2 => LevelFilter::DEBUG,
+        _ => LevelFilter::TRACE,
+    };
 
     let env_log = EnvFilter::builder()
-        .with_default_directive(lf.into())
+        .with_default_directive(log_level.into())
         .from_env_lossy();
 
     tracing_log::LogTracer::init()?;
@@ -35,8 +38,14 @@ fn init_logging(level: &Option<String>) -> anyhow::Result<()> {
 }
 
 fn main() -> Result<()> {
-    init_logging(&Some("info".to_string()))?;
+    let cli = config::CliOptions::from_args();
+
+    init_logging(cli.verbose)?;
     info!("Starting");
+
+    let config_file = cli.config_file
+        .unwrap_or(Utf8PathBuf::from("/etc/proxeny/proxeny.corn"));
+    let _config = config::read_config(&config_file);
 
     let certstore = Arc::new(CertStore::new(Vec::from(TEST_HOSTS))?);
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
