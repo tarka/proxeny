@@ -102,6 +102,19 @@ pub struct Config {
     pub servers: Vec<Server>,
 }
 
+impl Config {
+
+    pub fn tls_files(&self) -> Vec<&TlsFilesConfig> {
+        self.servers.iter()
+            .filter_map(|s| match &s.tls {
+                TlsConfigType::Files(tfc) => Some(tfc),
+                _ => None
+            })
+            .collect()
+    }
+
+}
+
 pub fn read_config(file: &Utf8Path) -> Result<Config> {
     let key = std::fs::read_to_string(&file)?;
     let config = corn::from_str(&key)?;
@@ -154,6 +167,23 @@ mod tests {
                 certfile: _,
                 reload: true,
             })));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_files() -> Result<()> {
+        let file = Utf8PathBuf::from("tests/data/config/no-optionals.corn");
+        let config = read_config(&file)?;
+
+        let files = config.tls_files();
+        assert_eq!(2, files.len());
+        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host01.example.com.key"), files[0].keyfile);
+        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host01.example.com.crt"), files[0].certfile);
+        assert!(files[0].reload);
+        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host02.example.com.key"), files[1].keyfile);
+        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host02.example.com.crt"), files[1].certfile);
+        assert!(files[1].reload);
 
         Ok(())
     }
