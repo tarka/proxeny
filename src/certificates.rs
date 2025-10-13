@@ -29,7 +29,7 @@ use pingora::{
 };
 use tracing::{debug, info, warn};
 
-use crate::config::{Config, TlsAcmeConfig, TlsConfigType, TlsFilesConfig};
+use crate::config::{Config, TlsConfigType, TlsFilesConfig};
 
 
 struct HostCertificate {
@@ -241,7 +241,7 @@ mod tests {
     use http::Uri;
 
     use super::*;
-    use crate::config::{AcmeChallenge, AcmeProvider, Backend, DnsProvider, Server, TlsFilesConfig};
+    use crate::config::{AcmeChallenge, AcmeProvider, Backend, DnsProvider, Server, TlsAcmeConfig, TlsFilesConfig};
 
 
     #[test]
