@@ -29,7 +29,7 @@ use pingora::{
 };
 use tracing::{debug, info, warn};
 
-use crate::config::{Config, TlsConfigType, TlsFilesConfig};
+use crate::config::{Config, TlsAcmeConfig, TlsConfigType, TlsFilesConfig};
 
 
 struct HostCertificate {
@@ -58,7 +58,6 @@ fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
     config.servers.iter()
         .filter_map(|s| match &s.tls {
             TlsConfigType::Files(TlsFilesConfig {keyfile, certfile, reload: true}) => {
-//            TlsConfigType::Files(tfc) => {
                 Some(vec![
                     keyfile.clone(),
                     certfile.clone(),
@@ -242,7 +241,7 @@ mod tests {
     use http::Uri;
 
     use super::*;
-    use crate::config::{Backend, Server, TlsFilesConfig};
+    use crate::config::{AcmeChallenge, AcmeProvider, Backend, DnsProvider, Server, TlsFilesConfig};
 
 
     #[test]
@@ -266,6 +265,18 @@ mod tests {
                         keyfile: Utf8PathBuf::from("keyfile2.key"),
                         certfile: Utf8PathBuf::from("certfile2.crt"),
                         reload: false,
+                    }),
+                    backend: Backend {
+                        url: Uri::from_static("http://localhost")
+                    }
+                },
+                Server {
+                    hostname: "host3".to_owned(),
+                    tls: TlsConfigType::Acme(TlsAcmeConfig {
+                        provider: AcmeProvider::LetsEncrypt,
+                        challenge_type: AcmeChallenge::Dns01,
+                        contact: "myname@example.com".to_string(),
+                        dns_provider: DnsProvider::Gandi(),
                     }),
                     backend: Backend {
                         url: Uri::from_static("http://localhost")
