@@ -23,7 +23,7 @@ pub struct CliOptions {
     ///
     /// Override the config file location
     #[arg(short = 'c', long)]
-    pub config_file: Option<Utf8PathBuf>,
+    pub config: Option<Utf8PathBuf>,
 }
 
 impl CliOptions {

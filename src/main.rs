@@ -14,7 +14,6 @@ use tracing_subscriber::EnvFilter;
 
 use crate::certificates::{CertStore, CertWatcher};
 
-const TEST_HOSTS: [&str; 2] = ["dvalinn.haltcondition.net", "adguard.haltcondition.net"];
 
 fn init_logging(level: u8) -> anyhow::Result<()> {
     let log_level = match level {
@@ -43,11 +42,12 @@ fn main() -> Result<()> {
     init_logging(cli.verbose)?;
     info!("Starting");
 
-    let config_file = cli.config_file
+    let config_file = cli.config
         .unwrap_or(Utf8PathBuf::from("/etc/proxeny/proxeny.corn"));
-    let _config = config::read_config(&config_file);
+    info!("Loading config {config_file}");
+    let config = config::read_config(&config_file)?;
 
-    let certstore = Arc::new(CertStore::new(Vec::from(TEST_HOSTS))?);
+    let certstore = Arc::new(CertStore::new(&config)?);
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 
     let certstore_server = certstore.clone();

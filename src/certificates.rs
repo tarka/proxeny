@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::{
     self as cbc,
     select,
@@ -27,11 +27,10 @@ use pingora::{
         x509::X509
     }
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
+use crate::{config::{Config, TlsConfigType}};
 
-// FIXME: Move to config
-const TEST_DIR: &str = "tests/data/certs/acme";
 
 struct HostCertificate {
     host: String,
@@ -41,28 +40,16 @@ struct HostCertificate {
     certs: Vec<X509>,
 }
 
-fn load_cert_files(host: &str) -> Result<HostCertificate> {
-    // FIXME
-    let keyfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.key"));
-    let certfile = Utf8PathBuf::from(format!("{TEST_DIR}/{host}.crt"));
-    let key = std::fs::read(&keyfile)?;
-    let cert = std::fs::read(&certfile)?;
+fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
+    let key = std::fs::read(keyfile)?;
+    let cert = std::fs::read(certfile)?;
 
     let key = PKey::private_key_from_pem(&key)?;
     let certs = X509::stack_from_pem(&cert)?;
     if certs.is_empty() {
         bail!("No certificates found in TLS .crt file");
     }
-
-    let hostcert = HostCertificate {
-        host: host.to_owned(),
-        keyfile,
-        key,
-        certfile,
-        certs,
-    };
-
-    Ok(hostcert)
+    Ok((key, certs))
 }
 
 
@@ -72,15 +59,27 @@ pub struct CertStore {
 }
 
 impl CertStore {
-    pub fn new(hosts: Vec<&str>) -> Result<Self> {
+    pub fn new(config: &Config) -> Result<Self> {
         info!("Loading host certificates");
 
-        let certs: Vec<Arc<HostCertificate>> = hosts.iter()
-            .map(|host| {
-                let cert = load_cert_files(host)?;
-                Ok(Arc::new(cert))
+        let certs = config.servers.iter()
+            .filter(|s| matches!(s.tls, TlsConfigType::Files(_)))
+            .map(|s| match &s.tls {
+                TlsConfigType::Files(tfc) => {
+                    debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
+                    let (key, certs) = load_certs(&tfc.keyfile, &tfc.certfile)?;
+                    let hostcert = HostCertificate {
+                        host: s.hostname.to_owned(),
+                        keyfile: tfc.keyfile.clone(),
+                        key,
+                        certfile: tfc.certfile.clone(),
+                        certs,
+                    };
+                    Ok(Arc::new(hostcert))
+                }
+                _ => unreachable!("Found filtered value")
             })
-            .collect::<Result<_>>()?;
+            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
 
         let by_host = certs.iter()
             .map(|cert| (cert.host.clone(), cert.clone()))
