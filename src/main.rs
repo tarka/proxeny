@@ -49,19 +49,23 @@ fn main() -> Result<()> {
     let certstore = Arc::new(CertStore::new(&config)?);
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 
-    let certstore_server = certstore.clone();
-    let server_handle = thread::spawn(move || -> Result<()> {
-        info!("Starting Proxy");
-        proxy::run_indefinitely(certstore_server)?;
-        Ok(())
-    });
+    let server_handle = {
+        let certstore = certstore.clone();
+        thread::spawn(move || -> Result<()> {
+            info!("Starting Proxy");
+            proxy::run_indefinitely(certstore)?;
+            Ok(())
+        })
+    };
 
-    let cwc = certwatcher.clone();
-    let watcher_handle = thread::spawn(move || -> Result<()> {
-        info!("Starting cert watcher");
-        cwc.watch()?;
-        Ok(())
-    });
+    let watcher_handle = {
+        let certwatcher = certwatcher.clone();
+        thread::spawn(move || -> Result<()> {
+            info!("Starting cert watcher");
+            certwatcher.watch()?;
+            Ok(())
+        })
+    };
 
     server_handle.join()
         .expect("Failed to finalise server task")?;
