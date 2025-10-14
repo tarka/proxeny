@@ -32,7 +32,7 @@ impl CliOptions {
     }
 }
 
-
+pub const DEFAULT_CONFIG_FILE: &str = "/etc/proxeny/proxeny.corn";
 
 fn deserialize_canonical<'de, D>(deserializer: D) -> std::result::Result<Utf8PathBuf, D::Error>
 where

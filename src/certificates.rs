@@ -169,7 +169,7 @@ impl CertStore {
 }
 
 
-const RELOAD_GRACE: Duration = Duration::from_secs(2);
+const RELOAD_GRACE: Duration = Duration::from_millis(1500);
 
 pub struct CertWatcher {
     certstore: Arc<CertStore>,

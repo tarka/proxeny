@@ -12,8 +12,7 @@ use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use crate::certificates::{CertStore, CertWatcher};
-
+use crate::{certificates::{CertStore, CertWatcher}, config::DEFAULT_CONFIG_FILE};
 
 fn init_logging(level: u8) -> anyhow::Result<()> {
     let log_level = match level {
@@ -43,7 +42,7 @@ fn main() -> Result<()> {
     info!("Starting");
 
     let config_file = cli.config
-        .unwrap_or(Utf8PathBuf::from("/etc/proxeny/proxeny.corn"));
+        .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     info!("Loading config {config_file}");
     let config = config::read_config(&config_file)?;
 
