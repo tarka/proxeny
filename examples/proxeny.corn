@@ -1,7 +1,8 @@
 
+// See https://cornlang.dev/user-guide/
 let {
   // The default ACME provider for DNS-01 verification.
-  $acme_default = {
+  $acme_dns = {
     provider = "letsencrypt"
     challenge_type = "dns-01"
     contact = "tarkasteve@gmail.com"
@@ -15,30 +16,40 @@ let {
 
   servers = [
 
-    // Adguard Incus container
+    // Gateway machine; host Grafana for network stats
     {
-      hostname = "adguard.haltcondition.net"
+      hostname = "gateway.example.com"
       tls = {
         files = {
-          keyfile = "/etc/ssl/certs/adguard.haltcondition.net.key"
-          certfile = "/etc/ssl/certs/adguard.haltcondition.net.crt"
+          keyfile = "/etc/ssl/certs/wildcard.example.net.key"
+          certfile = "/etc/ssl/certs/wildcard.example.net.crt"
           reload = true
         }
       }
-      backend = {
-        url = "http://localhost:8080"
-      }
+      backends = [
+        {
+          // Single root service; no context require here
+          url = "http://localhost:8080"
+        }
+      ]
     }
 
-    // HTPC machine, hosts multiple services in contexts
+    // Fileserver, hosts multiple services under context paths
     {
-      hostname = "htpc.haltcondition.net"
+      hostname = "files.example.com"
       tls = {
-        acme = $acme_default
+        acme = $acme_dns
       }
-      backend = {
-        url = "http://localhost:8080"
-      }
+      backends = [
+        {
+          context = "/paperless"
+          url = "http://localhost:8080"
+        }
+        {
+          context = "/copyparty"
+          url = "http://localhost:9090"
+        }
+      ]
     }
   ]
 }

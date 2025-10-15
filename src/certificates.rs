@@ -318,9 +318,12 @@ mod tests {
                         certfile: Utf8PathBuf::from("certfile1.crt"),
                         reload: true,
                     }),
-                    backend: Backend {
-                        url: Uri::from_static("http://localhost")
-                    }
+                    backends: vec![
+                        Backend {
+                            context: None,
+                            url: Uri::from_static("http://localhost")
+                        }
+                    ]
                 },
                 Server {
                     hostname: "host2".to_owned(),
@@ -329,9 +332,12 @@ mod tests {
                         certfile: Utf8PathBuf::from("certfile2.crt"),
                         reload: false,
                     }),
-                    backend: Backend {
-                        url: Uri::from_static("http://localhost")
-                    }
+                    backends: vec![
+                        Backend {
+                            context: None,
+                            url: Uri::from_static("http://localhost")
+                        }
+                    ]
                 },
                 Server {
                     hostname: "host3".to_owned(),
@@ -341,9 +347,12 @@ mod tests {
                         contact: "myname@example.com".to_string(),
                         dns_provider: DnsProvider::Gandi(),
                     }),
-                    backend: Backend {
-                        url: Uri::from_static("http://localhost")
-                    }
+                    backends: vec![
+                        Backend {
+                            context: None,
+                            url: Uri::from_static("http://localhost")
+                        }
+                    ]
                 },
             ]
         };

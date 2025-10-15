@@ -102,6 +102,7 @@ pub enum TlsConfigType {
 
 #[derive(Debug, Deserialize)]
 pub struct Backend {
+    pub context: Option<String>,
     #[serde(with = "http_serde::uri")]
     pub url: Uri,
 }
@@ -110,7 +111,7 @@ pub struct Backend {
 pub struct Server {
     pub hostname: String,
     pub tls: TlsConfigType,
-    pub backend: Backend,
+    pub backends: Vec<Backend>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,8 +149,8 @@ mod tests {
         let file = Utf8PathBuf::from("examples/proxeny.corn");
         let config = read_config(&file)?;
         assert_eq!(2, config.servers.len());
-        assert_eq!("adguard.haltcondition.net", config.servers[0].hostname);
-        assert_eq!("htpc.haltcondition.net", config.servers[1].hostname);
+        assert_eq!("gateway.example.com", config.servers[0].hostname);
+        assert_eq!("files.example.com", config.servers[1].hostname);
 
         assert!(matches!(&config.servers[0].tls, TlsConfigType::Files(
             TlsFilesConfig {
@@ -166,6 +167,9 @@ mod tests {
                 dns_provider: DnsProvider::DnSimple(_),
             },
         )));
+
+        assert_eq!(None, config.servers[0].backends[0].context);
+        assert_eq!("/paperless", config.servers[1].backends[0].context.as_ref().unwrap());
 
         Ok(())
     }

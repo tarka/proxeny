@@ -10,9 +10,11 @@
           certfile = "/etc/ssl/certs/host01.example.com.crt"
         }
       }
-      backend = {
-        url = "http://localhost:8080"
-      }
+      backends = [
+        {
+          url = "http://localhost:8080"
+        }
+      ]
     }
 
     {
@@ -23,9 +25,11 @@
           certfile = "/etc/ssl/certs/host02.example.com.crt"
         }
       }
-      backend = {
-        url = "http://localhost:8080"
-      }
+      backends = [
+        {
+          url = "http://localhost:8080"
+        }
+      ]
     }
   ]
 }
