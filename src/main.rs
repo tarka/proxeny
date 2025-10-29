@@ -53,7 +53,7 @@ fn main() -> Result<()> {
         let certstore = certstore.clone();
         thread::spawn(move || -> Result<()> {
             info!("Starting Proxy");
-            proxy::run_indefinitely(certstore)?;
+            proxy::run_indefinitely(certstore, &config)?;
             Ok(())
         })
     };

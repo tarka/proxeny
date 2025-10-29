@@ -13,7 +13,7 @@ use pingora::{
 };
 use tracing::info;
 
-use crate::certificates::{CertHandler, CertStore};
+use crate::{certificates::{CertHandler, CertStore}, config::Config};
 
 
 struct Proxeny {
@@ -43,18 +43,24 @@ impl ProxyHttp for Proxeny {
 }
 
 
-pub fn run_indefinitely(certstore: Arc<CertStore>) -> Result<()> {
+pub fn run_indefinitely(certstore: Arc<CertStore>, _config: &Config) -> Result<()> {
     info!("Starting Proxy");
-
-    let cert_handler = CertHandler::new(certstore.clone());
-    let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
-    let proxeny = Proxeny { certstore: certstore.clone() };
 
     let mut server = Server::new(None)?;
     server.bootstrap();
 
+    let cert_handler = CertHandler::new(certstore.clone());
+    let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+
+    let proxeny = Proxeny {
+        certstore: certstore.clone(),
+    };
+
     let mut proxy = http_proxy_service(&server.configuration, proxeny);
+
+    // FIXME: Placeholder; this should be 301/HSTS (and later Acme HTTP-01 challenges)
     proxy.add_tcp("0.0.0.0:8080");
+
     proxy.add_tls_with_settings("0.0.0.0:8443", None, tls_settings);
 
     server.add_service(proxy);
