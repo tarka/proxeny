@@ -302,6 +302,7 @@ impl TlsAccept for CertHandler {
 #[cfg(test)]
 mod tests {
     use http::Uri;
+    use zone_update::gandi::Auth;
 
     use super::*;
     use crate::config::{AcmeChallenge, AcmeProvider, Backend, DnsProvider, Server, TlsAcmeConfig, TlsFilesConfig};
@@ -345,7 +346,7 @@ mod tests {
                         provider: AcmeProvider::LetsEncrypt,
                         challenge_type: AcmeChallenge::Dns01,
                         contact: "myname@example.com".to_string(),
-                        dns_provider: DnsProvider::Gandi(),
+                        dns_provider: DnsProvider::Gandi(Auth::ApiKey("test".to_string())),
                     }),
                     backends: vec![
                         Backend {

@@ -5,6 +5,9 @@ use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::{Deserialize, Deserializer};
 use serde_default_utils::default_bool;
+use zone_update::{
+    gandi, dnsimple, dnsmadeeasy, porkbun,
+};
 
 #[derive(Clone, Debug, Parser)]
 #[command(
@@ -65,14 +68,10 @@ pub enum AcmeChallenge {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DnsProvider {
-    DnSimple(DnSimpleConfig),
-    Gandi(),
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DnSimpleConfig {
-    pub key: String,
-    pub account_id: u64,
+    Gandi(gandi::Auth),
+    Dnsimple(dnsimple::Auth),
+    DnsMadeEasy(dnsmadeeasy::Auth),
+    PorkBun(porkbun::Auth),
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,7 +163,7 @@ mod tests {
                 provider: AcmeProvider::LetsEncrypt,
                 challenge_type: AcmeChallenge::Dns01,
                 contact: _,  // FIXME: Match String?
-                dns_provider: DnsProvider::DnSimple(_),
+                dns_provider: DnsProvider::Dnsimple(_),
             },
         )));
 
