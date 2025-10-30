@@ -74,7 +74,7 @@ fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
     // We only watch user-supplied certs that are flagged to
     // reload. Acme certs are ignored.
     config.servers.iter()
-        .filter_map(|s| match &s.tls {
+        .filter_map(|s| match &s.tls.config {
             TlsConfigType::Files(TlsFilesConfig {keyfile, certfile, reload: true}) => {
                 Some(vec![
                     keyfile.clone(),
@@ -102,8 +102,8 @@ impl CertStore {
         info!("Loading host certificates");
 
         let certs = config.servers.iter()
-            .filter(|s| matches!(s.tls, TlsConfigType::Files(_)))
-            .map(|s| match &s.tls {
+            .filter(|s| matches!(s.tls.config, TlsConfigType::Files(_)))
+            .map(|s| match &s.tls.config {
                 TlsConfigType::Files(tfc) => {
                     debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
                     let (key, certs) = load_certs(&tfc.keyfile, &tfc.certfile)?;
@@ -305,7 +305,7 @@ mod tests {
     use zone_update::gandi::Auth;
 
     use super::*;
-    use crate::config::{AcmeChallenge, AcmeProvider, Backend, DnsProvider, Server, TlsAcmeConfig, TlsFilesConfig};
+    use crate::config::{AcmeChallenge, AcmeProvider, Backend, DnsProvider, Server, TlsAcmeConfig, TlsConfig, TlsFilesConfig};
 
 
     #[test]
@@ -314,11 +314,14 @@ mod tests {
             servers: vec![
                 Server {
                     hostname: "host1".to_owned(),
-                    tls: TlsConfigType::Files(TlsFilesConfig {
-                        keyfile: Utf8PathBuf::from("keyfile1.key"),
-                        certfile: Utf8PathBuf::from("certfile1.crt"),
-                        reload: true,
-                    }),
+                    tls: TlsConfig {
+                        port: 443,
+                        config: TlsConfigType::Files(TlsFilesConfig {
+                            keyfile: Utf8PathBuf::from("keyfile1.key"),
+                            certfile: Utf8PathBuf::from("certfile1.crt"),
+                            reload: true,
+                        })
+                    },
                     backends: vec![
                         Backend {
                             context: None,
@@ -328,11 +331,14 @@ mod tests {
                 },
                 Server {
                     hostname: "host2".to_owned(),
-                    tls: TlsConfigType::Files(TlsFilesConfig {
-                        keyfile: Utf8PathBuf::from("keyfile2.key"),
-                        certfile: Utf8PathBuf::from("certfile2.crt"),
-                        reload: false,
-                    }),
+                    tls: TlsConfig {
+                        port: 443,
+                        config: TlsConfigType::Files(TlsFilesConfig {
+                            keyfile: Utf8PathBuf::from("keyfile2.key"),
+                            certfile: Utf8PathBuf::from("certfile2.crt"),
+                            reload: false,
+                        })
+                    },
                     backends: vec![
                         Backend {
                             context: None,
@@ -342,12 +348,15 @@ mod tests {
                 },
                 Server {
                     hostname: "host3".to_owned(),
-                    tls: TlsConfigType::Acme(TlsAcmeConfig {
-                        provider: AcmeProvider::LetsEncrypt,
-                        challenge_type: AcmeChallenge::Dns01,
-                        contact: "myname@example.com".to_string(),
-                        dns_provider: DnsProvider::Gandi(Auth::ApiKey("test".to_string())),
-                    }),
+                    tls: TlsConfig {
+                        port: 443,
+                        config: TlsConfigType::Acme(TlsAcmeConfig {
+                            provider: AcmeProvider::LetsEncrypt,
+                            challenge_type: AcmeChallenge::Dns01,
+                            contact: "myname@example.com".to_string(),
+                            dns_provider: DnsProvider::Gandi(Auth::ApiKey("test".to_string())),
+                        })}
+                    ,
                     backends: vec![
                         Backend {
                             context: None,

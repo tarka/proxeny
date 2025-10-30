@@ -5,7 +5,7 @@
     {
       hostname = "host01.example.com"
       tls = {
-        files = {
+        config.files = {
           keyfile = "/etc/ssl/certs/host01.example.com.key"
           certfile = "/etc/ssl/certs/host01.example.com.crt"
         }
@@ -20,9 +20,11 @@
     {
       hostname = "host02.example.com"
       tls = {
-        files = {
-          keyfile = "/etc/ssl/certs/host02.example.com.key"
-          certfile = "/etc/ssl/certs/host02.example.com.crt"
+        config = {
+          files = {
+            keyfile = "/etc/ssl/certs/host02.example.com.key"
+            certfile = "/etc/ssl/certs/host02.example.com.crt"
+          }
         }
       }
       backends = [

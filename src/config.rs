@@ -4,7 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::{Deserialize, Deserializer};
-use serde_default_utils::default_bool;
+use serde_default_utils::{default_bool, default_u16};
 use zone_update::{
     gandi, dnsimple, dnsmadeeasy, porkbun,
 };
@@ -94,6 +94,15 @@ pub struct TlsFilesConfig {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub struct TlsConfig {
+    #[serde(default = "default_u16::<80>")]
+    pub port: u16,
+    pub config: TlsConfigType,
+}
+
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TlsConfigType {
     Files(TlsFilesConfig),
     Acme(TlsAcmeConfig),
@@ -109,7 +118,7 @@ pub struct Backend {
 #[derive(Debug, Deserialize)]
 pub struct Server {
     pub hostname: String,
-    pub tls: TlsConfigType,
+    pub tls: TlsConfig,
     pub backends: Vec<Backend>,
 }
 
@@ -122,17 +131,23 @@ impl Config {
 
     pub fn tls_files(&self) -> Vec<&TlsFilesConfig> {
         self.servers.iter()
-            .filter_map(|s| match &s.tls {
+            .filter_map(|s| match &s.tls.config {
                 TlsConfigType::Files(tfc) => Some(tfc),
                 _ => None
             })
             .collect()
     }
 
+    pub fn tls_ports(&self) -> Vec<u16> {
+        self.servers.iter()
+            .map(|s| s.tls.port)
+            .collect()
+    }
+
 }
 
 pub fn read_config(file: &Utf8Path) -> Result<Config> {
-    println!("loading {file}");
+    println!("Loading {file}");
     let key = std::fs::read_to_string(&file)?;
     let config = corn::from_str(&key)?;
     Ok(config)
@@ -147,28 +162,32 @@ mod tests {
     fn test_example_config() -> Result<()> {
         let file = Utf8PathBuf::from("examples/proxeny.corn");
         let config = read_config(&file)?;
-        assert_eq!(2, config.servers.len());
-        assert_eq!("gateway.example.com", config.servers[0].hostname);
-        assert_eq!("files.example.com", config.servers[1].hostname);
+        assert_eq!(1, config.servers.len());
+        assert_eq!("dvalinn.haltcondition.net", config.servers[0].hostname);
+//        assert_eq!("files.example.com", config.servers[1].hostname);
 
-        assert!(matches!(&config.servers[0].tls, TlsConfigType::Files(
+        assert_eq!(8443, config.servers[0].tls.port);
+        assert!(matches!(&config.servers[0].tls.config, TlsConfigType::Files(
             TlsFilesConfig {
                 keyfile: _,  // FIXME: Match Utf8PathBuf?
                 certfile: _,
                 reload: true,
             })));
 
-        assert!(matches!(config.servers[1].tls, TlsConfigType::Acme(
-            TlsAcmeConfig {
-                provider: AcmeProvider::LetsEncrypt,
-                challenge_type: AcmeChallenge::Dns01,
-                contact: _,  // FIXME: Match String?
-                dns_provider: DnsProvider::Dnsimple(_),
-            },
-        )));
+        // assert!(matches!(config.servers[1].tls.config, TlsConfigType::Acme(
+        //     TlsAcmeConfig {
+        //         provider: AcmeProvider::LetsEncrypt,
+        //         challenge_type: AcmeChallenge::Dns01,
+        //         contact: _,  // FIXME: Match String?
+        //         dns_provider: DnsProvider::Dnsimple(_),
+        //     }),
+        // ));
 
-        assert_eq!(None, config.servers[0].backends[0].context);
-        assert_eq!("/paperless", config.servers[1].backends[0].context.as_ref().unwrap());
+//        assert_eq!(None, config.servers[0].backends[0].context);
+        assert_eq!("/paperless", config.servers[0].backends[0].context.as_ref().unwrap());
+
+//        assert!(config.servers[0].is_tls());
+
 
         Ok(())
     }
@@ -181,7 +200,7 @@ mod tests {
         assert_eq!("host01.example.com", config.servers[0].hostname);
         assert_eq!("host02.example.com", config.servers[1].hostname);
 
-        assert!(matches!(&config.servers[0].tls, TlsConfigType::Files(
+        assert!(matches!(&config.servers[0].tls.config, TlsConfigType::Files(
             TlsFilesConfig {
                 keyfile: _,
                 certfile: _,

@@ -44,16 +44,17 @@ fn main() -> Result<()> {
     let config_file = cli.config
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     info!("Loading config {config_file}");
-    let config = config::read_config(&config_file)?;
+    let config = Arc::new(config::read_config(&config_file)?);
 
     let certstore = Arc::new(CertStore::new(&config)?);
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 
     let server_handle = {
         let certstore = certstore.clone();
+        let config = config.clone();
         thread::spawn(move || -> Result<()> {
             info!("Starting Proxy");
-            proxy::run_indefinitely(certstore, &config)?;
+            proxy::run_indefinitely(certstore, config)?;
             Ok(())
         })
     };

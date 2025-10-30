@@ -1,14 +1,13 @@
 
-// See https://cornlang.dev/user-guide/
 let {
   // The default ACME provider for DNS-01 verification.
-  $acme_dns = {
+  $acme_default = {
     provider = "letsencrypt"
     challenge_type = "dns-01"
     contact = "tarkasteve@gmail.com"
-    dns_provider.dnsimple = {
-      key = "fhsa-9fhahsodfhajlj"
-      account_id = 5432
+    dns_provider.porkbun = {
+      key = "a_key"
+      secret = "a_secret"
     }
   }
 
@@ -16,30 +15,28 @@ let {
 
   servers = [
 
-    // Gateway machine; host Grafana for network stats
     {
-      hostname = "gateway.example.com"
-      tls = {
-        files = {
-          keyfile = "/etc/ssl/certs/wildcard.example.net.key"
-          certfile = "/etc/ssl/certs/wildcard.example.net.crt"
-          reload = true
-        }
-      }
-      backends = [
-        {
-          // Single root service; no context require here
-          url = "http://localhost:8080"
-        }
-      ]
-    }
+      hostname = "dvalinn.haltcondition.net"
+      //listen = "*" // default, equivalent to ["0.0.0.0", "[::]"]
 
-    // Fileserver, hosts multiple services under context paths
-    {
-      hostname = "files.example.com"
-      tls = {
-        acme = $acme_dns
+      insecure = {
+          port = 8080 // Default should be 80(?)
+          response.redirect = "tls"
+          // TODO: response.acme = { .. }
       }
+
+      tls = {
+        port = 8443 // Default should be 443
+        config = {
+          // `files` or `acme`
+          files = {
+            keyfile = "tests/data/certs/snakeoil.key"
+            certfile = "tests/data/certs/snakeoil.crt"
+            reload = true
+          }
+        }
+      }
+
       backends = [
         {
           context = "/paperless"
@@ -51,5 +48,6 @@ let {
         }
       ]
     }
+
   ]
 }
