@@ -1,7 +1,7 @@
 
 use std::{fs, sync::Arc, time::Duration};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::{
@@ -10,6 +10,7 @@ use crossbeam_channel::{
     Receiver,
     Sender
 };
+use http::Uri;
 use itertools::Itertools;
 use notify::{
     EventKind,
@@ -21,13 +22,9 @@ use notify_debouncer_full::{
     DebouncedEvent,
 };
 use pingora::{
-    listeners::TlsAccept,
-    protocols::tls::TlsRef,
-    tls::{
-        pkey::{PKey, Private},
-        ssl::NameType,
-        x509::X509
-    }
+    listeners::TlsAccept, protocols::tls::TlsRef, tls::{
+        pkey::{PKey, Private}, ssl::NameType, x509::X509
+    }, ErrorType, OkOrErr
 };
 use tracing::{debug, info, warn};
 
@@ -97,6 +94,20 @@ pub struct CertStore {
     watchlist: Vec<Utf8PathBuf>,
 }
 
+fn cn_host(cn: String) -> Result<String> {
+    let host = cn.split('=')
+        .nth(1)
+        .or_err(ErrorType::InvalidCert, "Failed to find host in cert 'CN=...'")?;
+    Ok(host.to_string())
+}
+
+fn uri_host(uri: &String) -> Result<String> {
+    let parsed = Uri::try_from(uri)?;
+    let host = parsed.host()
+        .context("Failed to find host in servername '{uri}'")?;
+    Ok(host.to_string())
+}
+
 impl CertStore {
     pub fn new(config: &Config) -> Result<Self> {
         info!("Loading host certificates");
@@ -107,8 +118,16 @@ impl CertStore {
                 TlsConfigType::Files(tfc) => {
                     debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
                     let (key, certs) = load_certs(&tfc.keyfile, &tfc.certfile)?;
+
+                    let cn = cn_host(certs[0].subject_name().print_ex(0)
+                                     .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
+                    let s_host = uri_host(&s.hostname)?;
+                    if s_host != cn {
+                        bail!("Certificate {cn} doesn't match server host {s_host}");
+                    }
+
                     let hostcert = HostCertificate {
-                        host: s.hostname.to_owned(),
+                        host: cn,
                         keyfile: tfc.keyfile.clone(),
                         key,
                         certfile: tfc.certfile.clone(),
