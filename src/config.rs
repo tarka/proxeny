@@ -49,14 +49,14 @@ where
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AcmeProvider {
     LetsEncrypt,
     ZeroSsl,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AcmeChallenge {
     #[serde(rename = "dns-01")]
@@ -65,7 +65,7 @@ pub enum AcmeChallenge {
     Http01,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DnsProvider {
     Gandi(gandi::Auth),
@@ -74,7 +74,7 @@ pub enum DnsProvider {
     PorkBun(porkbun::Auth),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TlsAcmeConfig {
     pub provider: AcmeProvider,
     pub challenge_type: AcmeChallenge,
@@ -82,7 +82,7 @@ pub struct TlsAcmeConfig {
     pub dns_provider: DnsProvider,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TlsFilesConfig {
     #[serde(deserialize_with = "deserialize_canonical")]
     pub keyfile: Utf8PathBuf,
@@ -92,7 +92,7 @@ pub struct TlsFilesConfig {
     pub reload: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub struct TlsConfig {
     #[serde(default = "default_u16::<80>")]
@@ -101,21 +101,21 @@ pub struct TlsConfig {
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TlsConfigType {
     Files(TlsFilesConfig),
     Acme(TlsAcmeConfig),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Backend {
     pub context: Option<String>,
     #[serde(with = "http_serde::uri")]
     pub url: Uri,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Server {
     pub hostname: String,
     pub tls: TlsConfig,
