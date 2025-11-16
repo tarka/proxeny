@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use http::{header::HOST, StatusCode};
-use pingora::{
-    listeners::tls::TlsSettings, prelude::HttpPeer, proxy::{http_proxy_service, ProxyHttp, Session}, server::{RunArgs, Server}, ErrorType, OkOrErr, OrErr
-};
-use tracing::{info, trace};
 
-use crate::{certificates::{CertHandler, CertStore}, config::{Backend, Config}};
+use pingora_core::{listeners::tls::TlsSettings, prelude::HttpPeer, server::Server, ErrorType, OkOrErr, OrErr};
+use pingora_proxy::{http_proxy_service, ProxyHttp, Session};
+use tracing::info;
+
+use crate::{certificates::{handler::CertHandler, store::CertStore}, config::{Backend, Config}};
 
 
 struct Proxeny {
@@ -34,7 +34,7 @@ impl ProxyHttp for Proxeny {
         ()
     }
 
-    async fn upstream_peer(&self, session: &mut Session, _ctx: &mut Self::CTX) -> pingora::Result<Box<HttpPeer>> {
+    async fn upstream_peer(&self, session: &mut Session, _ctx: &mut Self::CTX) -> pingora_core::Result<Box<HttpPeer>> {
         info!("Peer: {:#?}", session.req_header());
 
         // RequestHeader {
@@ -81,7 +81,7 @@ impl ProxyHttp for Proxeny {
 
         // FIXME: There are faster ways to do this, plus caching.
         info!("FETCH HOST: {host}");
-        let backends = by_host.pin().get(host)
+        let _backends = by_host.pin().get(host)
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Hostname not found in backends")?;
 
 
@@ -123,7 +123,7 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
 
     server.add_service(proxy);
 
-    server.run(RunArgs::default());
+    server.run(pingora_core::server::RunArgs::default());
 
     Ok(())
 }

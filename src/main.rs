@@ -12,7 +12,7 @@ use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use crate::{certificates::{CertStore, CertWatcher}, config::DEFAULT_CONFIG_FILE};
+use crate::{certificates::{store::CertStore, watcher::CertWatcher}, config::DEFAULT_CONFIG_FILE};
 
 fn init_logging(level: u8) -> anyhow::Result<()> {
     let log_level = match level {

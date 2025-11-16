@@ -16,14 +16,18 @@ itertools = "0.14.0"
 notify = { version = "8.2.0", default-features = false, features = ["crossbeam-channel", "fsevent-sys"] }
 notify-debouncer-full = { version = "0.6.0", default-features = false, features = ["crossbeam-channel"] }
 papaya = "0.2.3"
-pingora = { version = "0.6.0", default-features = false, features = ["boringssl", "proxy"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_default_utils = "0.3.1"
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 zone-update = "0.5.1"
+pingora-core = { version = "0.6.0", features = ["boringssl"] }
+pingora-http = "0.6.0"
+pingora-proxy = "0.6.0"
+pingora-boringssl = "0.6.0"
 
 [lints.rust]
 # FIXME: For early dev, remove before release
 dead_code = "allow"
+#unused = "allow"
