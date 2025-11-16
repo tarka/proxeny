@@ -10,28 +10,22 @@ use anyhow::Result;
 use camino::Utf8PathBuf;
 use tracing::info;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::EnvFilter;
 
 use crate::{certificates::{store::CertStore, watcher::CertWatcher}, config::DEFAULT_CONFIG_FILE};
 
-fn init_logging(level: u8) -> anyhow::Result<()> {
+fn init_logging(level: u8) -> Result<()> {
     let log_level = match level {
-        0 => LevelFilter::WARN,
         1 => LevelFilter::INFO,
         2 => LevelFilter::DEBUG,
-        _ => LevelFilter::TRACE,
+        3 => LevelFilter::TRACE,
+        _ => LevelFilter::WARN,
     };
 
-    let env_log = EnvFilter::builder()
-        .with_default_directive(log_level.into())
-        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .with_max_level(log_level)
+        .init();
 
-    tracing_log::LogTracer::init()?;
-    let fmt = tracing_subscriber::fmt()
-        .with_env_filter(env_log)
-        .finish();
-    tracing::subscriber::set_global_default(fmt)?;
-
+    info!("Logging initialised");
     Ok(())
 }
 
