@@ -73,6 +73,7 @@ impl ProxyHttp for Proxeny {
         info!("PATH: {:#?}", path);
 
         // TODO: move to init
+        // FIXME: Worth it? 99% of selfhost installs will server a single front-end host?
         let by_host: papaya::HashMap<String, Vec<Backend>> = self.config.servers.iter()
             .map(|s| (s.hostname.clone(),
                       s.backends.clone()))
@@ -126,4 +127,69 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
     server.run(pingora_core::server::RunArgs::default());
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use http::Uri;
+    use matchit::Router;
+    use test_log::test;
+    use crate::config::Backend;
+
+    #[test]
+    fn test_matchit() -> Result<()> {
+        let backends = vec![
+            Backend {
+                context: None,
+                url: Uri::from_static("http://localhost:1010")
+            },
+            Backend {
+                context: Some("/service".to_string()),
+                url: Uri::from_static("http://localhost:2020")
+            },
+            Backend {
+                context: Some("/service/subservice/".to_string()),
+                url: Uri::from_static("http://localhost:3030")
+            },
+            Backend {
+                context: Some("/other_service/".to_string()),
+                url: Uri::from_static("http://localhost:4040")
+            },
+        ];
+
+        let mut routes = Router::new();
+        for b in backends {
+            match b.context {
+                Some(ref path) => {
+                    routes.insert(path.clone(), b)?;
+                }
+                None => {
+                    routes.insert("{*path}".to_string(), b)?;
+                }
+            }
+        }
+
+
+        let matched = routes.at("/")?;
+        assert_eq!(Uri::from_static("http://localhost:1010"), matched.value.url);
+        assert_eq!("/", matched.params.get("path").unwrap());
+
+        let matched = routes.at("/base/path")?;
+        assert_eq!(Uri::from_static("http://localhost:1010"), matched.value.url);
+        assert_eq!("/base/path", matched.params.get("path").unwrap());
+
+        // assert_eq!(Uri::from_static("http://localhost:2020"), routes.at("/service")?.value.url);
+        // assert_eq!(Uri::from_static("http://localhost:2020"), routes.at("/service/")?.value.url);
+        // assert_eq!(Uri::from_static("http://localhost:2020"), routes.at("/service/some/path")?.value.url);
+
+        // assert_eq!(Uri::from_static("http://localhost:3030"), routes.at("/service/subservice")?.value.url);
+        // assert_eq!(Uri::from_static("http://localhost:3030"), routes.at("/service/subservice/")?.value.url);
+        // assert_eq!(Uri::from_static("http://localhost:3030"), routes.at("/service/subservice/ss/path")?.value.url);
+
+        // assert_eq!(Uri::from_static("http://localhost:4040"), routes.at("/other_service/some/path")?.value.url);
+
+        Ok(())
+    }
+
 }

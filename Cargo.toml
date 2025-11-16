@@ -26,8 +26,12 @@ pingora-core = { version = "0.6.0", features = ["boringssl"] }
 pingora-http = "0.6.0"
 pingora-proxy = "0.6.0"
 pingora-boringssl = "0.6.0"
+matchit = "0.9.0"
 
 [lints.rust]
 # FIXME: For early dev, remove before release
 dead_code = "allow"
+
+[dev-dependencies]
+test-log = { version = "0.2.18", features = ["trace"] }
 #unused = "allow"
