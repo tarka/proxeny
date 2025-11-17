@@ -18,7 +18,6 @@ struct Match<'a> {
 }
 
 struct Router {
-    // FIXME: Backends could be Arc, but probably not worth it?
     tree: PathTree<Backend>,
 }
 
@@ -30,6 +29,8 @@ impl Router {
         let mut tree = PathTree::new();
 
         for b in backends {
+            // FIXME: Backend could be Arc, but probably not worth it?
+            let backend = b.clone();
             match b.context {
                 Some(ref path) => {
                     let path = if path.ends_with("/") {
@@ -39,13 +40,11 @@ impl Router {
                         path.clone()
                     };
                     let matcher = format!("{path}:{PATHVAR}*");
-                    println!("Inserting {matcher}");
-                    let _id = tree.insert(&matcher, b.clone());
+                    let _id = tree.insert(&matcher, backend);
                 }
                 None => {
                     let matcher = format!("/:{PATHVAR}*");
-                    println!("Inserting {matcher}");
-                    let _id = tree.insert(&matcher, b.clone());}
+                    let _id = tree.insert(&matcher, backend);}
             }
         }
 
