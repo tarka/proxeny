@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use http::{header::HOST, StatusCode};
+use http::{header::HOST, uri::Scheme, StatusCode};
 
 use path_tree::PathTree;
 use pingora_core::{listeners::tls::TlsSettings, prelude::HttpPeer, server::Server, ErrorType, OkOrErr, OrErr};
@@ -136,11 +136,18 @@ impl ProxyHttp for Proxeny {
         let pinned = self.routes_by_host.pin();
         let router = pinned.get(host)
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Hostname not found in backends")?;
-        let backend = router.lookup(path)
+        let matched = router.lookup(path)
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Path not found in host backends")?;
 
+        let url = &matched.backend.url;
+        let tls = url.scheme() == Some(&Scheme::HTTPS);
+        let host = url.host()
+            .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Backend host lookup failed")?;
+        let port = url.port()  // TODO: Can default this? Or should be required?
+            .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Backend port lookup failed")?
+            .as_u16();
 
-        let peer = HttpPeer::new("htpc.haltcondition.net:8989", false, "htpc.haltcondition.net".to_string());
+        let peer = HttpPeer::new((host, port), tls, host.to_string());
         Ok(Box::new(peer))
     }
 
