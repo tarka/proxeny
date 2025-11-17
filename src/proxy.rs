@@ -5,11 +5,63 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use http::{header::HOST, StatusCode};
 
+use path_tree::PathTree;
 use pingora_core::{listeners::tls::TlsSettings, prelude::HttpPeer, server::Server, ErrorType, OkOrErr, OrErr};
 use pingora_proxy::{http_proxy_service, ProxyHttp, Session};
 use tracing::info;
 
 use crate::{certificates::{handler::CertHandler, store::CertStore}, config::{Backend, Config}};
+
+struct Match<'a> {
+    backend: &'a Backend,
+    path: String,
+}
+
+struct Router<'a> {
+    tree: PathTree<&'a Backend>,
+}
+
+const PATHVAR: &str = "subpath";
+
+impl<'a> Router<'a> {
+
+    fn new(backends: &'a Vec<Backend>) -> Self {
+        let mut tree = PathTree::new();
+
+        for b in backends {
+            match b.context {
+                Some(ref path) => {
+                    let path = if path.ends_with("/") {
+                        let len = path.len();
+                        path.as_str()[..len-1].to_string()
+                    } else {
+                        path.clone()
+                    };
+                    let matcher = format!("{path}:{PATHVAR}*");
+                    println!("Inserting {matcher}");
+                    let _id = tree.insert(&matcher, b);
+                }
+                None => {
+                    let matcher = format!("/:{PATHVAR}*");
+                    println!("Inserting {matcher}");
+                    let _id = tree.insert(&matcher, b);}
+            }
+        }
+
+        Router {
+            tree
+        }
+    }
+
+    fn lookup(&self, path: &str) -> Option<Match<'a>> {
+        let (backend, matched) = self.tree.find(&path)?;
+        let rest = matched.params()[0].1.to_string();
+        Some(Match {
+            backend,
+            path: rest,
+        })
+    }
+}
 
 
 struct Proxeny {
@@ -131,9 +183,9 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use anyhow::Result;
     use http::Uri;
-    use path_tree::PathTree;
     use test_log::test;
     use crate::config::Backend;
 
@@ -158,69 +210,43 @@ mod tests {
             },
         ];
 
-        const PATHVAR: &str = "subpath";
+        let router = Router::new(&backends);
 
-        let mut routes = PathTree::new();
-        for b in backends {
-            match b.context {
-                Some(ref path) => {
-                    let path = if path.ends_with("/") {
-                        let len = path.len();
-                        path.as_str()[..len-1].to_string()
-                    } else {
-                        path.clone()
-                    };
-                    let matcher = format!("{path}:{PATHVAR}*");
-                    println!("Inserting {matcher}");
-                    let _id = routes.insert(&matcher, b);
-                }
-                None => {
-                    let matcher = format!("/:{PATHVAR}*");
-                    println!("Inserting {matcher}");
-                    let _id = routes.insert(&matcher, b);}
-            }
-        }
+        let matched = router.lookup("/").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:1010"), matched.backend.url);
+        assert_eq!("", matched.path);
 
+        let matched = router.lookup("/base/path").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:1010"), matched.backend.url);
+        assert_eq!("base/path", matched.path);
 
-        let (matched, path) = routes.find("/").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:1010"), matched.url);
-        assert_eq!(1, path.params().len());
-        assert_eq!("subpath", path.params()[0].0);
-        assert_eq!("", path.params()[0].1);
+        let matched = router.lookup("/service").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:2020"), matched.backend.url);
+        assert_eq!("", matched.path);
 
-        let (matched, path) = routes.find("/base/path").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:1010"), matched.url);
-        assert_eq!(1, path.params().len());
-        assert_eq!("subpath", path.params()[0].0);
-        assert_eq!("base/path", path.params()[0].1);
+        let matched = router.lookup("/service/").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:2020"), matched.backend.url);
+        assert_eq!("/", matched.path);
 
-        let (matched, path) = routes.find("/service").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:2020"), matched.url);
-        assert_eq!("", path.params()[0].1);
+        let matched = router.lookup("/service/some/path").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:2020"), matched.backend.url);
+        assert_eq!("/some/path", matched.path);
 
-        let (matched, path) = routes.find("/service/").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:2020"), matched.url);
-        assert_eq!("/", path.params()[0].1);
+        let matched = router.lookup("/service/subservice").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:3030"), matched.backend.url);
+        assert_eq!("", matched.path);
 
-        let (matched, path) = routes.find("/service/some/path").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:2020"), matched.url);
-        assert_eq!("/some/path", path.params()[0].1);
+        let matched = router.lookup("/service/subservice/").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:3030"), matched.backend.url);
+        assert_eq!("/", matched.path);
 
-        let (matched, path) = routes.find("/service/subservice").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:3030"), matched.url);
-        assert_eq!("", path.params()[0].1);
+        let matched = router.lookup("/service/subservice/ss/path").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:3030"), matched.backend.url);
+        assert_eq!("/ss/path", matched.path);
 
-        let (matched, path) = routes.find("/service/subservice/").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:3030"), matched.url);
-        assert_eq!("/", path.params()[0].1);
-
-        let (matched, path) = routes.find("/service/subservice/ss/path").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:3030"), matched.url);
-        assert_eq!("/ss/path", path.params()[0].1);
-
-        let (matched, path) = routes.find("/other_service/some/path").unwrap();
-        assert_eq!(Uri::from_static("http://localhost:4040"), matched.url);
-        assert_eq!("/some/path", path.params()[0].1);
+        let matched = router.lookup("/other_service/some/path").unwrap();
+        assert_eq!(Uri::from_static("http://localhost:4040"), matched.backend.url);
+        assert_eq!("/some/path", matched.path);
 
         Ok(())
     }
