@@ -17,15 +17,16 @@ struct Match<'a> {
     path: String,
 }
 
-struct Router<'a> {
-    tree: PathTree<&'a Backend>,
+struct Router {
+    // FIXME: Backends could be Arc, but probably not worth it?
+    tree: PathTree<Backend>,
 }
 
 const PATHVAR: &str = "subpath";
 
-impl<'a> Router<'a> {
+impl Router {
 
-    fn new(backends: &'a Vec<Backend>) -> Self {
+    fn new(backends: &Vec<Backend>) -> Self {
         let mut tree = PathTree::new();
 
         for b in backends {
@@ -39,12 +40,12 @@ impl<'a> Router<'a> {
                     };
                     let matcher = format!("{path}:{PATHVAR}*");
                     println!("Inserting {matcher}");
-                    let _id = tree.insert(&matcher, b);
+                    let _id = tree.insert(&matcher, b.clone());
                 }
                 None => {
                     let matcher = format!("/:{PATHVAR}*");
                     println!("Inserting {matcher}");
-                    let _id = tree.insert(&matcher, b);}
+                    let _id = tree.insert(&matcher, b.clone());}
             }
         }
 
@@ -53,7 +54,7 @@ impl<'a> Router<'a> {
         }
     }
 
-    fn lookup(&self, path: &str) -> Option<Match<'a>> {
+    fn lookup(&self, path: &str) -> Option<Match<'_>> {
         let (backend, matched) = self.tree.find(&path)?;
         let rest = matched.params()[0].1.to_string();
         Some(Match {
@@ -67,13 +68,19 @@ impl<'a> Router<'a> {
 struct Proxeny {
     config: Arc<Config>,
     certstore: Arc<CertStore>,
+    routes_by_host: papaya::HashMap<String, Router>,
 }
 
 impl Proxeny {
     fn new(certstore: Arc<CertStore>, config: Arc<Config>) -> Self {
+        let routes_by_host: papaya::HashMap<String, Router> = config.servers.iter()
+            .map(|s| (s.hostname.clone(),
+                      Router::new(&s.backends)))
+            .collect();
         Self {
             config,
-            certstore
+            certstore,
+            routes_by_host,
         }
     }
 }
@@ -124,18 +131,13 @@ impl ProxyHttp for Proxeny {
         let path = session.req_header().uri.path();
         info!("PATH: {:#?}", path);
 
-        // TODO: move to init
-        // FIXME: Worth it? 99% of selfhost installs will server a single front-end host?
-        let by_host: papaya::HashMap<String, Vec<Backend>> = self.config.servers.iter()
-            .map(|s| (s.hostname.clone(),
-                      s.backends.clone()))
-            .collect();
-        info!("BY_HOST: {by_host:#?}");
-
         // FIXME: There are faster ways to do this, plus caching.
         info!("FETCH HOST: {host}");
-        let _backends = by_host.pin().get(host)
+        let pinned = self.routes_by_host.pin();
+        let router = pinned.get(host)
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Hostname not found in backends")?;
+        let backend = router.lookup(path)
+            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Path not found in host backends")?;
 
 
         let peer = HttpPeer::new("htpc.haltcondition.net:8989", false, "htpc.haltcondition.net".to_string());
