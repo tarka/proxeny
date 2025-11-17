@@ -1227,12 +1227,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchit"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ea5f97102eb9e54ab99fb70bb175589073f554bdadfb74d9bd656482ea73e2a"
-
-[[package]]
 name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1505,6 +1499,15 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "path-tree"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a97453bc21a968f722df730bfe11bd08745cb50d1300b0df2bda131dece136"
+dependencies = [
+ "smallvec",
+]
 
 [[package]]
 name = "pem-rfc7468"
@@ -1865,10 +1868,10 @@ dependencies = [
  "http-serde",
  "itertools 0.14.0",
  "libcorn",
- "matchit",
  "notify",
  "notify-debouncer-full",
  "papaya",
+ "path-tree",
  "pingora-boringssl",
  "pingora-core",
  "pingora-http",
