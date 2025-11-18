@@ -133,10 +133,12 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
     for sv in config.servers.iter() {
         let cert_handler = CertHandler::new(certstore.clone());
         let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+
+        // TODO: Listen on specific IP/interface
         let addr = format!("[::]:{}", sv.tls.port);
         proxy.add_tls_with_settings(&addr, None, tls_settings);
 
-        // FIXME: Placeholder; this should be 301/HSTS (and later Acme HTTP-01 challenges)
+        // FIXME: This should be 301/HSTS (and later Acme HTTP-01 challenges)
         // proxy.add_tcp("[::]:8080");
     }
 

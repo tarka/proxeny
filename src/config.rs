@@ -5,6 +5,7 @@ use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::{Deserialize, Deserializer};
 use serde_default_utils::{default_bool, default_u16};
+use tracing_log::log::info;
 use zone_update::{
     gandi, dnsimple, dnsmadeeasy, porkbun,
 };
@@ -147,7 +148,7 @@ impl Config {
 }
 
 pub fn read_config(file: &Utf8Path) -> Result<Config> {
-    println!("Loading {file}");
+    info!("Loading config {file}");
     let key = std::fs::read_to_string(&file)?;
     let config = corn::from_str(&key)?;
     Ok(config)

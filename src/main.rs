@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use tracing::info;
 use tracing::level_filters::LevelFilter;
+use tracing_log::log::info;
 
 use crate::{certificates::{store::CertStore, watcher::CertWatcher}, config::DEFAULT_CONFIG_FILE};
 
@@ -37,7 +37,7 @@ fn main() -> Result<()> {
 
     let config_file = cli.config
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
-    info!("Loading config {config_file}");
+
     let config = Arc::new(config::read_config(&config_file)?);
 
     let certstore = Arc::new(CertStore::new(&config)?);

@@ -33,5 +33,8 @@ path-tree = "0.8.3"
 dead_code = "allow"
 
 [dev-dependencies]
+nix = { version = "0.30.1", features = ["process", "signal", "term"] }
+procfs = "0.18.0"
+test-context = "0.5.4"
 test-log = { version = "0.2.18", features = ["trace"] }
 #unused = "allow"
