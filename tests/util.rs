@@ -34,15 +34,16 @@ pub fn run_proxy() -> Result<&'static Child> {
 
         let child = Command::new(exe)
             .arg("-vv")
-            .arg("-c").arg("proxeny.corn")
+            .arg("-c").arg("tests/proxeny.corn")
             .spawn()
             .expect("Failed to start proxy");
         child
     });
 
     for _ in 0..20 { // 2 second timeout
-        let ready = reqwest::blocking::get(format!("http://localhost:{PROXY_PORT}/status"))
-            .is_ok_and(|r| r.status().is_success());
+        let ready = reqwest::blocking::get(format!("http://localhost:{PROXY_PORT}/status"));
+        println!("READY: {ready:#?}");
+        let ready = ready.is_ok_and(|r| r.status().as_u16() == 301);
         if ready {
             return Ok(child);
         }

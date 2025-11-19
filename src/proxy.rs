@@ -3,14 +3,68 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use http::{header::HOST, uri::Scheme, StatusCode};
+use http::{header, uri::{Authority, Builder, Scheme}, Response, StatusCode, Uri};
 
 use path_tree::PathTree;
-use pingora_core::{listeners::tls::TlsSettings, prelude::HttpPeer, server::Server, ErrorType, OkOrErr, OrErr};
-use pingora_proxy::{http_proxy_service, ProxyHttp, Session};
-use tracing::info;
+use pingora_core::{
+    apps::http_app::ServeHttp,
+    listeners::tls::TlsSettings,
+    prelude::HttpPeer,
+    protocols::http::ServerSession,
+    services::listening::Service,
+    server::Server as PingoraServer,
+    ErrorType,
+    OkOrErr,
+    OrErr
+};
+use pingora_proxy::{ProxyHttp, Session};
+use tracing::{debug, info};
 
 use crate::{certificates::{handler::CertHandler, store::CertStore}, config::{Backend, Config}};
+
+struct TlsRedirector {
+    port: u16,
+}
+
+impl TlsRedirector {
+    pub fn new(port: u16) -> Self {
+        Self {
+            port
+        }
+    }
+}
+
+const REDIRECT_BODY: &[u8] = "<html><body>301 Moved Permanently</body></html>".as_bytes();
+
+#[async_trait]
+impl ServeHttp for TlsRedirector {
+    async fn response(&self, session: &mut ServerSession) -> Response<Vec<u8>> {
+        let host = session.get_header(header::HOST)
+            .expect("Failed to get host header on HTTP service")
+            .to_str()
+            .expect("Failed to convert host header to str");
+
+        let uri = session.req_header().uri.clone();
+        // TODO: `host` is not the full authority (i.e. including
+        // uname:pw section). Doesn't matter?
+        let location = Builder::from(uri)
+            .scheme(Scheme::HTTPS)
+            .authority(host)
+            .build()
+            .expect("Failed to convert URI to HTTPS");
+
+        debug!("Redirect to {location}");
+        let body = REDIRECT_BODY.to_owned();
+        Response::builder()
+            .status(StatusCode::MOVED_PERMANENTLY)
+            .header(header::CONTENT_TYPE, "text/html")
+            .header(header::CONTENT_LENGTH, body.len())
+            .header(header::LOCATION, location.to_string())
+            .body(body)
+            .expect("Failed to create HTTP->HTTPS redirect response")
+    }
+}
+
 
 struct Match<'a> {
     backend: &'a Backend,
@@ -93,7 +147,7 @@ impl ProxyHttp for Proxeny {
     }
 
     async fn upstream_peer(&self, session: &mut Session, _ctx: &mut Self::CTX) -> pingora_core::Result<Box<HttpPeer>> {
-        let host = session.req_header().headers.get(HOST)
+        let host = session.req_header().headers.get(header::HOST)
             .or_err(ErrorType::InvalidHTTPHeader, "No Host header in request")?
             .to_str()
             .or_err(ErrorType::InvalidHTTPHeader, "Invalid Host header")?;
@@ -123,28 +177,39 @@ impl ProxyHttp for Proxeny {
 pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyhow::Result<()> {
     info!("Starting Proxy");
 
-    let mut server = Server::new(None)?;
-    server.bootstrap();
-
-    let proxeny = Proxeny::new(certstore.clone(), config.clone());
-
-    let mut proxy = http_proxy_service(&server.configuration, proxeny);
+    let mut pingora_server = PingoraServer::new(None)?;
+    pingora_server.bootstrap();
 
     for sv in config.servers.iter() {
-        let cert_handler = CertHandler::new(certstore.clone());
-        let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+        let tls_proxy = {
+            let proxeny = Proxeny::new(certstore.clone(), config.clone());
 
-        // TODO: Listen on specific IP/interface
-        let addr = format!("[::]:{}", sv.tls.port);
-        proxy.add_tls_with_settings(&addr, None, tls_settings);
+            let mut pingora_proxy = pingora_proxy::http_proxy_service(
+                &pingora_server.configuration,
+                proxeny);
 
-        // FIXME: This should be 301/HSTS (and later Acme HTTP-01 challenges)
-        // proxy.add_tcp("[::]:8080");
+            let cert_handler = CertHandler::new(certstore.clone());
+            let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+
+            // TODO: Listen on specific IP/interface
+            let addr = format!("[::]:{}", sv.tls.port);
+            pingora_proxy.add_tls_with_settings(&addr, None, tls_settings);
+            pingora_proxy
+        };
+
+        let http_redirect = {
+            let redirector = TlsRedirector::new(sv.tls.port);
+            let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
+            service.add_tcp("[::]:8080");  // FIXME
+            service
+        };
+
+        pingora_server.add_service(tls_proxy);
+        pingora_server.add_service(http_redirect);
     }
 
-    server.add_service(proxy);
 
-    server.run(pingora_core::server::RunArgs::default());
+    pingora_server.run(pingora_core::server::RunArgs::default());
 
     Ok(())
 }
@@ -154,12 +219,22 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
 mod tests {
     use super::*;
     use anyhow::Result;
-    use http::Uri;
+    use http::{uri::Builder, Uri};
     use test_log::test;
     use crate::config::Backend;
 
     #[test]
-    fn test_matchit() -> Result<()> {
+    fn test_uri_rewrite() -> Result<()> {
+        let uri = Uri::from_static("http://example.com/a/path?param=value");
+        let changed = Builder::from(uri)
+            .scheme("https")
+            .build()?;
+        assert_eq!("https://example.com/a/path?param=value", changed.to_string());
+        Ok(())
+    }
+
+    #[test]
+    fn test_router() -> Result<()> {
         let backends = vec![
             Backend {
                 context: None,
