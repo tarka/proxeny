@@ -23,18 +23,35 @@ use tracing::{debug, info};
 use crate::{certificates::{handler::CertHandler, store::CertStore}, config::{Backend, Config}};
 
 struct TlsRedirector {
-    port: u16,
+    port: String,
 }
 
 impl TlsRedirector {
     pub fn new(port: u16) -> Self {
         Self {
-            port
+            port: port.to_string()
         }
     }
 }
 
 const REDIRECT_BODY: &[u8] = "<html><body>301 Moved Permanently</body></html>".as_bytes();
+
+
+fn rewrite_port(host: &str, newport: &str) -> String {
+    let port_i = if let Some(i) = host.rfind(':') {
+        i
+    } else {
+        return host.to_string();
+    };
+    if !host[port_i + 1..].parse::<u16>().is_ok() {
+        // Not an int, assume not port ':'
+        return host.to_string();
+    }
+    let host_only = &host[0..port_i];
+
+    format!("{host_only}:{newport}")
+}
+
 
 #[async_trait]
 impl ServeHttp for TlsRedirector {
@@ -43,13 +60,15 @@ impl ServeHttp for TlsRedirector {
             .expect("Failed to get host header on HTTP service")
             .to_str()
             .expect("Failed to convert host header to str");
+        // Uri::Authority doesn't allow port overrides, so mangle the string
+        let new_host = rewrite_port(host, &self.port);
 
         let uri = session.req_header().uri.clone();
-        // TODO: `host` is not the full authority (i.e. including
-        // uname:pw section). Doesn't matter?
+        // TODO: `host` may not be full authority (i.e. including
+        // uname:pw section). Does it matter?
         let location = Builder::from(uri)
             .scheme(Scheme::HTTPS)
-            .authority(host)
+            .authority(new_host)
             .build()
             .expect("Failed to convert URI to HTTPS");
 
@@ -230,6 +249,15 @@ mod tests {
             .scheme("https")
             .build()?;
         assert_eq!("https://example.com/a/path?param=value", changed.to_string());
+        Ok(())
+    }
+
+    #[test]
+    fn test_host_port_rewrite() -> Result<()> {
+        let replaced = rewrite_port("example.com:8080", "8443");
+        assert_eq!("example.com:8443", replaced);
+        let replaced = rewrite_port("example.com", "8443");
+        assert_eq!("example.com", replaced);
         Ok(())
     }
 
