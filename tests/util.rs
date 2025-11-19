@@ -11,6 +11,7 @@ use procfs::{
     process::{FDTarget, Process},
     net::{tcp as tcp_table, tcp6 as tcp6_table}
 };
+use reqwest::{blocking::Client, redirect};
 use test_context::TestContext;
 use tokio::net::TcpListener;
 use tokio::select;
@@ -29,22 +30,28 @@ const PROXY_TLS_PORT: u16 = 8443;
 
 pub fn run_proxy() -> Result<&'static Child> {
     let child = PROXY.get_or_init(|| {
-        info!("Starting proxy");
+        info!("Starting Test Proxy");
         let exe = env!("CARGO_BIN_EXE_proxeny");
 
         let child = Command::new(exe)
             .arg("-vv")
-            .arg("-c").arg("tests/proxeny.corn")
+            .arg("-c").arg("proxeny.corn")
             .spawn()
             .expect("Failed to start proxy");
         child
     });
 
     for _ in 0..20 { // 2 second timeout
-        let ready = reqwest::blocking::get(format!("http://localhost:{PROXY_PORT}/status"));
-        println!("READY: {ready:#?}");
-        let ready = ready.is_ok_and(|r| r.status().as_u16() == 301);
+        // Look for a redirect from the non-TLS port.
+        let ready = Client::builder()
+            .redirect(redirect::Policy::none())
+            .build()?
+            .get(format!("http://localhost:{PROXY_PORT}/status"))
+            .send()
+            .is_ok_and(|r| r.status().as_u16() == 301);
+
         if ready {
+            info!("Test Proxy Ready");
             return Ok(child);
         }
         thread::sleep(Duration::from_millis(100));
