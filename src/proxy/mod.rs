@@ -11,7 +11,17 @@ use pingora_core::{
 };
 use tracing::info;
 
-use crate::{certificates::{handler::CertHandler, store::CertStore}, config::Config, proxy::{router::Router, services::{Proxeny, TlsRedirector}}};
+use crate::{
+    certificates::{
+        handler::CertHandler,
+        store::CertStore
+    },
+    config::Config,
+    proxy::services::{
+        Proxeny,
+        TlsRedirector
+    }
+};
 
 
 pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyhow::Result<()> {

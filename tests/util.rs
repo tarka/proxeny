@@ -1,26 +1,17 @@
-use std::{net::{IpAddr, SocketAddr}, process::{Child, Command}, sync::{Arc, LazyLock, OnceLock}};
+use std::{
+    process::{
+        Child,
+        Command
+    },
+    sync::OnceLock
+};
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use axum::extract::State;
-use axum::{routing, Json, Router};
 use ctor::dtor;
 use nix::{sys::signal::{Signal, kill}, unistd::Pid};
-use procfs::{
-    process::{FDTarget, Process},
-    net::{tcp as tcp_table, tcp6 as tcp6_table}
-};
 use reqwest::{blocking::Client, redirect};
 use test_context::TestContext;
-use tokio::net::TcpListener;
-use tokio::select;
-use tokio::sync::{
-    mpsc::{self, Receiver, Sender},
-    Notify,
-};
-use tokio::task::JoinHandle;
-use tokio::{fs::read_to_string, time::sleep};
 use tracing_log::log::info;
 
 static PROXY: OnceLock<Child> = OnceLock::new();
@@ -28,8 +19,8 @@ static PROXY: OnceLock<Child> = OnceLock::new();
 const PROXY_PORT: u16 = 8080;
 const PROXY_TLS_PORT: u16 = 8443;
 
-pub fn run_proxy() -> Result<&'static Child> {
-    let child = PROXY.get_or_init(|| {
+pub fn run_proxy() -> &'static Child {
+    PROXY.get_or_init(|| {
         info!("Starting Test Proxy");
         let exe = env!("CARGO_BIN_EXE_proxeny");
 
@@ -38,25 +29,25 @@ pub fn run_proxy() -> Result<&'static Child> {
             .arg("-c").arg("proxeny.corn")
             .spawn()
             .expect("Failed to start proxy");
-        child
-    });
 
-    for _ in 0..20 { // 2 second timeout
-        // Look for a redirect from the non-TLS port.
-        let ready = Client::builder()
-            .redirect(redirect::Policy::none())
-            .build()?
-            .get(format!("http://localhost:{PROXY_PORT}/status"))
-            .send()
-            .is_ok_and(|r| r.status().as_u16() == 301);
+        for _ in 0..20 { // 2 second timeout
+            // Look for a redirect from the non-TLS port.
+            let ready = Client::builder()
+                .redirect(redirect::Policy::none())
+                .build().unwrap()
+                .get(format!("http://localhost:{PROXY_PORT}/status"))
+                .send()
+                .is_ok_and(|r| r.status().as_u16() == 301);
 
-        if ready {
-            info!("Test Proxy Ready");
-            return Ok(child);
+            if ready {
+                info!("Test Proxy Ready");
+                return child;
+            }
+            thread::sleep(Duration::from_millis(100));
         }
-        thread::sleep(Duration::from_millis(100));
-    }
-    bail!("Failed to start proxy server")
+        panic!("Failed to start proxy server")
+
+    })
 }
 
 #[dtor]
@@ -82,8 +73,7 @@ pub struct IntegrationTest {
 
 impl TestContext for IntegrationTest {
     fn setup() -> Self {
-        let proxy = run_proxy()
-            .expect("Failed to get proxy process");
+        let proxy = run_proxy();
         Self {
             proxy: &proxy,
         }
