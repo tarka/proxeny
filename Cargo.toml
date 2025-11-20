@@ -31,7 +31,7 @@ path-tree = "0.8.3"
 [lints.rust]
 # FIXME: For early dev, remove before release
 dead_code = "allow"
-unused = "allow"
+#unused = "allow"
 
 [dev-dependencies]
 axum = "0.8.7"

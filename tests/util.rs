@@ -76,12 +76,6 @@ fn child_cleanup(possible_child: Option<&Child>) {
     }
 }
 
-// pub fn stop_child(child: &Child) -> Result<()> {
-//     let pid = Pid::from_raw(child.id().try_into()?);
-//     kill(pid, Signal::SIGINT)?;
-//     Ok(())
-// }
-
 pub struct IntegrationTest {
     pub proxy: &'static Child,
 }
@@ -96,6 +90,7 @@ impl TestContext for IntegrationTest {
     }
 
     fn teardown(self) {
+        // Handled via dtor above when process exits
     }
 }
 
