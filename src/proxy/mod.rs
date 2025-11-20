@@ -30,38 +30,35 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
     let mut pingora_server = PingoraServer::new(None)?;
     pingora_server.bootstrap();
 
-    for sv in config.servers.iter() {
-        let tls_proxy = {
-            let proxeny = Proxeny::new(certstore.clone(), config.clone());
+    // TODO: Currently single-server; support vhosts here in the future?
 
-            let mut pingora_proxy = pingora_proxy::http_proxy_service(
-                &pingora_server.configuration,
-                proxeny);
+    let tls_proxy = {
+        let proxeny = Proxeny::new(certstore.clone(), config.clone());
 
-            let cert_handler = CertHandler::new(certstore.clone());
-            let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
+        let mut pingora_proxy = pingora_proxy::http_proxy_service(
+            &pingora_server.configuration,
+            proxeny);
 
-            // TODO: Listen on specific IP/interface
-            let addr = format!("[::]:{}", sv.tls.port);
-            pingora_proxy.add_tls_with_settings(&addr, None, tls_settings);
-            pingora_proxy
-        };
+        let cert_handler = CertHandler::new(certstore.clone());
+        let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
 
-        let http_redirect = {
-            let redirector = TlsRedirector::new(sv.tls.port);
-            let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
-            service.add_tcp("[::]:8080");  // FIXME
-            service
-        };
+        // TODO: Listen on specific IP/interface
+        let addr = format!("[::]:{}", config.tls.port);
+        pingora_proxy.add_tls_with_settings(&addr, None, tls_settings);
+        pingora_proxy
+    };
 
-        pingora_server.add_service(tls_proxy);
-        pingora_server.add_service(http_redirect);
-    }
+    let http_redirect = {
+        let redirector = TlsRedirector::new(config.tls.port);
+        let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
+        service.add_tcp("[::]:8080");  // FIXME
+        service
+    };
 
+    pingora_server.add_service(tls_proxy);
+    pingora_server.add_service(http_redirect);
 
     pingora_server.run(pingora_core::server::RunArgs::default());
 
     Ok(())
 }
-
-

@@ -91,7 +91,7 @@ pub struct Proxeny {
 
 impl Proxeny {
     pub fn new(certstore: Arc<CertStore>, config: Arc<Config>) -> Self {
-        let routes_by_host: papaya::HashMap<String, Router> = config.servers.iter()
+        let routes_by_host: papaya::HashMap<String, Router> = config.servers().iter()
             .map(|s| (s.hostname.clone(),
                       Router::new(&s.backends)))
             .collect();

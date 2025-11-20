@@ -1,8 +1,6 @@
 
 {
 
-  servers = [
-    {
       hostname = "host01.example.com"
       tls = {
         config.files = {
@@ -15,23 +13,4 @@
           url = "http://localhost:8080"
         }
       ]
-    }
-
-    {
-      hostname = "host02.example.com"
-      tls = {
-        config = {
-          files = {
-            keyfile = "/etc/ssl/certs/host02.example.com.key"
-            certfile = "/etc/ssl/certs/host02.example.com.crt"
-          }
-        }
-      }
-      backends = [
-        {
-          url = "http://localhost:8080"
-        }
-      ]
-    }
-  ]
 }

@@ -13,10 +13,7 @@ let {
 
 }  in {
 
-  servers = [
-
-    {
-      hostname = "dvalinn.haltcondition.net"
+      hostname = "files.example.com"
       //listen = "*" // default, equivalent to ["0.0.0.0", "[::]"]
 
       insecure = {
@@ -47,7 +44,5 @@ let {
           url = "http://localhost:9090"
         }
       ]
-    }
 
-  ]
 }

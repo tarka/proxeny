@@ -108,68 +108,37 @@ impl CertWatcher {
 #[cfg(test)]
 mod tests {
     use http::Uri;
-    use zone_update::gandi::Auth;
 
     use super::*;
-    use crate::{certificates::store::gen_watchlist, config::{AcmeChallenge, AcmeProvider, Backend, Config, DnsProvider, Server, TlsAcmeConfig, TlsConfig, TlsConfigType, TlsFilesConfig}};
+    use crate::{
+        certificates::store::gen_watchlist,
+        config::{
+            Backend,
+            Config,
+            TlsConfig,
+            TlsConfigType,
+            TlsFilesConfig,
+        }
+    };
 
 
     #[test]
-    fn test_watchlist_exclusion() -> Result<()> {
+    fn test_gen_simple_watchlist() -> Result<()> {
         let config = Config {
-            servers: vec![
-                Server {
-                    hostname: "host1".to_owned(),
-                    tls: TlsConfig {
-                        port: 443,
-                        config: TlsConfigType::Files(TlsFilesConfig {
-                            keyfile: Utf8PathBuf::from("keyfile1.key"),
-                            certfile: Utf8PathBuf::from("certfile1.crt"),
-                            reload: true,
-                        })
-                    },
-                    backends: vec![
-                        Backend {
-                            context: None,
-                            url: Uri::from_static("http://localhost")
-                        }
-                    ]
-                },
-                Server {
-                    hostname: "host2".to_owned(),
-                    tls: TlsConfig {
-                        port: 443,
-                        config: TlsConfigType::Files(TlsFilesConfig {
-                            keyfile: Utf8PathBuf::from("keyfile2.key"),
-                            certfile: Utf8PathBuf::from("certfile2.crt"),
-                            reload: false,
-                        })
-                    },
-                    backends: vec![
-                        Backend {
-                            context: None,
-                            url: Uri::from_static("http://localhost")
-                        }
-                    ]
-                },
-                Server {
-                    hostname: "host3".to_owned(),
-                    tls: TlsConfig {
-                        port: 443,
-                        config: TlsConfigType::Acme(TlsAcmeConfig {
-                            provider: AcmeProvider::LetsEncrypt,
-                            challenge_type: AcmeChallenge::Dns01,
-                            contact: "myname@example.com".to_string(),
-                            dns_provider: DnsProvider::Gandi(Auth::ApiKey("test".to_string())),
-                        })}
-                    ,
-                    backends: vec![
-                        Backend {
-                            context: None,
-                            url: Uri::from_static("http://localhost")
-                        }
-                    ]
-                },
+            hostname: "host1".to_owned(),
+            tls: TlsConfig {
+                port: 443,
+                config: TlsConfigType::Files(TlsFilesConfig {
+                    keyfile: Utf8PathBuf::from("keyfile1.key"),
+                    certfile: Utf8PathBuf::from("certfile1.crt"),
+                    reload: true,
+                })
+            },
+            backends: vec![
+                Backend {
+                    context: None,
+                    url: Uri::from_static("http://localhost")
+                }
             ]
         };
 

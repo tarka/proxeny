@@ -117,42 +117,33 @@ pub struct Backend {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Server {
+pub struct Config {
     pub hostname: String,
+    // pub insecure: Option
     pub tls: TlsConfig,
     pub backends: Vec<Backend>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Config {
-    pub servers: Vec<Server>,
-}
+pub type Server = Config;
 
 impl Config {
-
-    pub fn tls_files(&self) -> Vec<&TlsFilesConfig> {
-        self.servers.iter()
-            .filter_map(|s| match &s.tls.config {
-                TlsConfigType::Files(tfc) => Some(tfc),
-                _ => None
-            })
-            .collect()
+    pub fn servers(&self) -> Vec<&Server> {
+        // TODO: We don't currently support multiple servers in the
+        // config, however some components do (see
+        // config/store.rs). This may change, so we fake it here.
+        vec![self]
     }
 
-    pub fn tls_ports(&self) -> Vec<u16> {
-        self.servers.iter()
-            .map(|s| s.tls.port)
-            .collect()
+    pub fn from_file(file: &Utf8Path) -> Result<Self> {
+        info!("Loading config {file}");
+        let key = std::fs::read_to_string(&file)?;
+        let config = corn::from_str(&key)?;
+        Ok(config)
     }
 
 }
 
-pub fn read_config(file: &Utf8Path) -> Result<Config> {
-    info!("Loading config {file}");
-    let key = std::fs::read_to_string(&file)?;
-    let config = corn::from_str(&key)?;
-    Ok(config)
-}
+
 
 
 #[cfg(test)]
@@ -162,13 +153,11 @@ mod tests {
     #[test]
     fn test_example_config() -> Result<()> {
         let file = Utf8PathBuf::from("examples/proxeny.corn");
-        let config = read_config(&file)?;
-        assert_eq!(1, config.servers.len());
-        assert_eq!("dvalinn.haltcondition.net", config.servers[0].hostname);
-//        assert_eq!("files.example.com", config.servers[1].hostname);
+        let config = Config::from_file(&file)?;
+        assert_eq!("files.example.com", config.hostname);
 
-        assert_eq!(8443, config.servers[0].tls.port);
-        assert!(matches!(&config.servers[0].tls.config, TlsConfigType::Files(
+        assert_eq!(8443, config.tls.port);
+        assert!(matches!(&config.tls.config, TlsConfigType::Files(
             TlsFilesConfig {
                 keyfile: _,  // FIXME: Match Utf8PathBuf?
                 certfile: _,
@@ -185,7 +174,7 @@ mod tests {
         // ));
 
 //        assert_eq!(None, config.servers[0].backends[0].context);
-        assert_eq!("/paperless", config.servers[0].backends[0].context.as_ref().unwrap());
+        assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
 
 //        assert!(config.servers[0].is_tls());
 
@@ -196,12 +185,10 @@ mod tests {
     #[test]
     fn test_no_optionals() -> Result<()> {
         let file = Utf8PathBuf::from("tests/data/config/no-optionals.corn");
-        let config = read_config(&file)?;
-        assert_eq!(2, config.servers.len());
-        assert_eq!("host01.example.com", config.servers[0].hostname);
-        assert_eq!("host02.example.com", config.servers[1].hostname);
+        let config = Config::from_file(&file)?;
+        assert_eq!("host01.example.com", config.hostname);
 
-        assert!(matches!(&config.servers[0].tls.config, TlsConfigType::Files(
+        assert!(matches!(&config.tls.config, TlsConfigType::Files(
             TlsFilesConfig {
                 keyfile: _,
                 certfile: _,
@@ -214,16 +201,17 @@ mod tests {
     #[test]
     fn test_extract_files() -> Result<()> {
         let file = Utf8PathBuf::from("tests/data/config/no-optionals.corn");
-        let config = read_config(&file)?;
+        let config = Config::from_file(&file)?;
 
-        let files = config.tls_files();
-        assert_eq!(2, files.len());
-        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host01.example.com.key"), files[0].keyfile);
-        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host01.example.com.crt"), files[0].certfile);
-        assert!(files[0].reload);
-        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host02.example.com.key"), files[1].keyfile);
-        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host02.example.com.crt"), files[1].certfile);
-        assert!(files[1].reload);
+
+        let files = if let TlsConfigType::Files(tfc) = config.tls.config {
+            tfc
+        } else {
+            panic!("Expected TLS files");
+        };
+        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host01.example.com.key"), files.keyfile);
+        assert_eq!(Utf8PathBuf::from("/etc/ssl/certs/host01.example.com.crt"), files.certfile);
+        assert!(files.reload);
 
         Ok(())
     }

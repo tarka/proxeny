@@ -26,7 +26,8 @@ pub fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Priva
 pub fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
     // We only watch user-supplied certs that are flagged to
     // reload. Acme certs are ignored.
-    config.servers.iter()
+
+    config.servers().iter()
         .filter_map(|s| match &s.tls.config {
             TlsConfigType::Files(TlsFilesConfig {keyfile, certfile, reload: true}) => {
                 Some(vec![
@@ -41,6 +42,10 @@ pub fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
 
 }
 
+// TODO: We currently use papaya to store lookup tables for multiple
+// server support. However we don't actually support multiple servers
+// in the config at the moment. This may change, so this is left in
+// place for now.
 pub struct CertStore {
     pub by_host: papaya::HashMap<String, Arc<HostCertificate>>,
     pub by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
@@ -68,7 +73,7 @@ impl CertStore {
     pub fn new(config: &Config) -> Result<Self> {
         info!("Loading host certificates");
 
-        let certs = config.servers.iter()
+        let certs = config.servers().iter()
             .filter(|s| matches!(s.tls.config, TlsConfigType::Files(_)))
             .map(|s| match &s.tls.config {
                 TlsConfigType::Files(tfc) => {
