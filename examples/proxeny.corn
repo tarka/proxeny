@@ -14,11 +14,11 @@ let {
 }  in {
 
       hostname = "files.example.com"
-      //listen = "*" // default, equivalent to ["0.0.0.0", "[::]"]
+      listen = "[::]"  // This covers IPv4 & IPv6
 
       insecure = {
           port = 8080 // Default should be 80(?)
-          response.redirect = "tls"
+          redirect = true
           // TODO: response.acme = { .. }
       }
 

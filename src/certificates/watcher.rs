@@ -126,6 +126,8 @@ mod tests {
     fn test_gen_simple_watchlist() -> Result<()> {
         let config = Config {
             hostname: "host1".to_owned(),
+            listen: "[::]".to_owned(),
+            insecure: None,
             tls: TlsConfig {
                 port: 443,
                 config: TlsConfigType::Files(TlsFilesConfig {

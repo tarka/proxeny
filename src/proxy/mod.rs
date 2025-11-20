@@ -43,20 +43,22 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
         let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
 
         // TODO: Listen on specific IP/interface
-        let addr = format!("[::]:{}", config.tls.port);
+        let addr = format!("{}:{}", config.listen, config.tls.port);
         pingora_proxy.add_tls_with_settings(&addr, None, tls_settings);
         pingora_proxy
     };
 
-    let http_redirect = {
+    if let Some(insecure) = &config.insecure
+        && insecure.redirect
+    {
         let redirector = TlsRedirector::new(config.tls.port);
         let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
-        service.add_tcp("[::]:8080");  // FIXME
-        service
+        let addr = format!("{}:{}", config.listen, insecure.port);
+        service.add_tcp(&addr);
+        pingora_server.add_service(service);
     };
 
     pingora_server.add_service(tls_proxy);
-    pingora_server.add_service(http_redirect);
 
     pingora_server.run(pingora_core::server::RunArgs::default());
 

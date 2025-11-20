@@ -4,7 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::{Deserialize, Deserializer};
-use serde_default_utils::{default_bool, default_u16};
+use serde_default_utils::{default_bool, default_u16, serde_inline_default};
 use tracing_log::log::info;
 use zone_update::{
     gandi, dnsimple, dnsmadeeasy, porkbun,
@@ -117,9 +117,20 @@ pub struct Backend {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct Insecure {
+    pub port: u16,
+    #[serde(default = "default_bool::<true>")]
+    pub redirect: bool,
+    // FIXME: HTTP-01 setup here?
+}
+
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     pub hostname: String,
-    // pub insecure: Option
+    #[serde_inline_default("[::]".to_string())]
+    pub listen: String,
+    pub insecure: Option<Insecure>,
     pub tls: TlsConfig,
     pub backends: Vec<Backend>,
 }
@@ -142,8 +153,6 @@ impl Config {
     }
 
 }
-
-
 
 
 #[cfg(test)]

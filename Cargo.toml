@@ -17,7 +17,7 @@ notify = { version = "8.2.0", default-features = false, features = ["crossbeam-c
 notify-debouncer-full = { version = "0.6.0", default-features = false, features = ["crossbeam-channel"] }
 papaya = "0.2.3"
 serde = { version = "1.0.228", features = ["derive"] }
-serde_default_utils = "0.3.1"
+serde_default_utils = { version = "0.3.1", features = ["inline"] }
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
