@@ -47,6 +47,8 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
         pingora_proxy.add_tls_with_settings(&addr, None, tls_settings);
         pingora_proxy
     };
+    pingora_server.add_service(tls_proxy);
+
 
     if let Some(insecure) = &config.insecure
         && insecure.redirect
@@ -57,9 +59,6 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, config: Arc<Config>) -> anyho
         service.add_tcp(&addr);
         pingora_server.add_service(service);
     };
-
-    pingora_server.add_service(tls_proxy);
-
     pingora_server.run(pingora_core::server::RunArgs::default());
 
     Ok(())
