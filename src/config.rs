@@ -5,7 +5,6 @@ use http::Uri;
 use serde::{Deserialize, Deserializer};
 use serde_default_utils::{default_bool, default_u16, serde_inline_default};
 use tracing_log::log::info;
-use zone_update::{dnsimple, dnsmadeeasy, gandi, porkbun};
 
 #[derive(Clone, Debug, Parser)]
 #[command(
@@ -53,31 +52,32 @@ pub enum AcmeProvider {
     LetsEncrypt,
     ZeroSsl,
 }
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DnsProvider {
-    Gandi(gandi::Auth),
-    Dnsimple(dnsimple::Auth),
-    DnsMadeEasy(dnsmadeeasy::Auth),
-    PorkBun(porkbun::Auth),
+impl Default for AcmeProvider {
+    fn default() -> Self {
+        Self::LetsEncrypt
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
+pub struct DnsProvider {
+    dns_provider: zone_update::Providers,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "lowercase", tag = "type")]
 pub enum AcmeChallenge {
     #[serde(rename = "dns-01")]
-    Dns01,
+    Dns01(DnsProvider),
     #[serde(rename = "http-01")]
     Http01,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TlsAcmeConfig {
-    pub provider: AcmeProvider,
+    #[serde(default)]
+    pub acme_provider: AcmeProvider,
     pub challenge_type: AcmeChallenge,
     pub contact: String,
-    pub dns_provider: DnsProvider,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -157,7 +157,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_example_config() -> Result<()> {
+    fn test_simple_example_config() -> Result<()> {
         let file = Utf8PathBuf::from("examples/proxeny.corn");
         let config = Config::from_file(&file)?;
         assert_eq!("files.example.com", config.hostname);
@@ -170,20 +170,29 @@ mod tests {
                 reload: true,
             })));
 
-        // assert!(matches!(config.servers[1].tls.config, TlsConfigType::Acme(
-        //     TlsAcmeConfig {
-        //         provider: AcmeProvider::LetsEncrypt,
-        //         challenge_type: AcmeChallenge::Dns01,
-        //         contact: _,  // FIXME: Match String?
-        //         dns_provider: DnsProvider::Dnsimple(_),
-        //     }),
-        // ));
-
-//        assert_eq!(None, config.servers[0].backends[0].context);
         assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
 
-//        assert!(config.servers[0].is_tls());
+        Ok(())
+    }
 
+    #[test]
+    fn test_acme_example_config() -> Result<()> {
+        let file = Utf8PathBuf::from("examples/proxeny-dns01.corn");
+        let config = Config::from_file(&file)?;
+        assert_eq!("files.example.com", config.hostname);
+
+        assert_eq!(8443, config.tls.port);
+        assert!(matches!(&config.tls.config, TlsConfigType::Acme(
+            TlsAcmeConfig {
+                contact: _,
+                acme_provider: AcmeProvider::LetsEncrypt,
+                challenge_type: AcmeChallenge::Dns01(DnsProvider {
+                    dns_provider: zone_update::Providers::PorkBun(_)
+                }),
+
+            })));
+
+        assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
 
         Ok(())
     }

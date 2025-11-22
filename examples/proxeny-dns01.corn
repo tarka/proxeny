@@ -1,0 +1,48 @@
+
+let {
+    $env_PORKBUN_KEY = "fallback value"
+    $env_PORKBUN_SECRET = "fallback value"
+
+} in {
+
+      hostname = "files.example.com"
+      listen = "[::]"  // This covers IPv4 & IPv6
+
+      insecure = {
+          port = 8080 // Default should be 80(?)
+          redirect = true
+          // TODO: response.acme = { .. }
+      }
+
+      tls = {
+        port = 8443 // Default should be 443
+        config = {
+          // `files` or `acme`
+          acme = {
+            acme_provider = "letsencrypt"
+            contact = "admin@example.com"
+            challenge_type = {
+              type = "dns-01"
+              dns_provider = {
+                name = "porkbun"
+                key = $env_PORKBUN_KEY
+                secret = $env_PORKBUN_SECRET
+              }
+            }
+          }
+
+        }
+               }
+
+      backends = [
+        {
+          context = "/paperless"
+          url = "http://localhost:8080"
+        }
+        {
+          context = "/copyparty"
+          url = "http://localhost:9090"
+        }
+      ]
+
+}
