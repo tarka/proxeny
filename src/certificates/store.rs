@@ -1,15 +1,19 @@
-
 use std::{fs, sync::Arc};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use http::Uri;
-use pingora_boringssl::{pkey::{PKey, Private}, x509::X509};
+use pingora_boringssl::{
+    pkey::{PKey, Private},
+    x509::X509,
+};
 use pingora_core::{ErrorType, OkOrErr};
 use tracing::{debug, info};
 
-use crate::{certificates::HostCertificate, config::{Config, TlsConfigType, TlsFilesConfig}};
-
+use crate::{
+    certificates::HostCertificate,
+    config::{Config, TlsConfigType, TlsFilesConfig},
+};
 
 pub fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
     let kdata = fs::read(keyfile)?;

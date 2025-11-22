@@ -1,11 +1,13 @@
-
 pub mod handler;
 pub mod store;
 pub mod watcher;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use pingora_boringssl::{pkey::{PKey, Private}, x509::X509};
+use pingora_boringssl::{
+    pkey::{PKey, Private},
+    x509::X509,
+};
 
 use crate::certificates::store::load_certs;
 

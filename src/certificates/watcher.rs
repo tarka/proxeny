@@ -1,27 +1,14 @@
-
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use crossbeam_channel::{
-    self as cbc,
-    select,
-    Receiver,
-    Sender
-};
+use crossbeam_channel::{self as cbc, Receiver, Sender, select};
 use itertools::Itertools;
-use notify::{
-    EventKind,
-    RecursiveMode,
-};
-use notify_debouncer_full::{
-    self as debouncer,
-    DebounceEventResult,
-    DebouncedEvent,
-};
+use notify::{EventKind, RecursiveMode};
+use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
 use tracing::{info, warn};
 
-use crate::certificates::{store::CertStore, HostCertificate};
+use crate::certificates::{HostCertificate, store::CertStore};
 
 
 const RELOAD_GRACE: Duration = Duration::from_millis(1500);

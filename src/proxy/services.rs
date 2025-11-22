@@ -1,23 +1,19 @@
-
-
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use http::{header, uri::{Builder, Scheme}, Response, StatusCode};
+use http::{
+    Response, StatusCode, header,
+    uri::{Builder, Scheme},
+};
 
 use pingora_core::{
-    apps::http_app::ServeHttp,
-    prelude::HttpPeer,
+    ErrorType, OkOrErr, OrErr, apps::http_app::ServeHttp, prelude::HttpPeer,
     protocols::http::ServerSession,
-    ErrorType,
-    OkOrErr,
-    OrErr
 };
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info};
 
 use crate::{certificates::store::CertStore, config::Config, proxy::router::Router};
-
 
 pub struct TlsRedirector {
     port: String,

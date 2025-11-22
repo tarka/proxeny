@@ -1,17 +1,19 @@
-
 mod certificates;
 mod config;
 mod proxy;
 
-use std::thread;
 use std::sync::Arc;
+use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
-use crate::{certificates::{store::CertStore, watcher::CertWatcher}, config::{Config, DEFAULT_CONFIG_FILE}};
+use crate::{
+    certificates::{store::CertStore, watcher::CertWatcher},
+    config::{Config, DEFAULT_CONFIG_FILE},
+};
 
 fn init_logging(level: u8) -> Result<()> {
     let log_level = match level {

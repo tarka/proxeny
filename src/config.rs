@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
@@ -6,9 +5,7 @@ use http::Uri;
 use serde::{Deserialize, Deserializer};
 use serde_default_utils::{default_bool, default_u16, serde_inline_default};
 use tracing_log::log::info;
-use zone_update::{
-    gandi, dnsimple, dnsmadeeasy, porkbun,
-};
+use zone_update::{dnsimple, dnsmadeeasy, gandi, porkbun};
 
 #[derive(Clone, Debug, Parser)]
 #[command(
@@ -59,20 +56,20 @@ pub enum AcmeProvider {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum AcmeChallenge {
-    #[serde(rename = "dns-01")]
-    Dns01,
-    #[serde(rename = "http-01")]
-    Http01,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub enum DnsProvider {
     Gandi(gandi::Auth),
     Dnsimple(dnsimple::Auth),
     DnsMadeEasy(dnsmadeeasy::Auth),
     PorkBun(porkbun::Auth),
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AcmeChallenge {
+    #[serde(rename = "dns-01")]
+    Dns01,
+    #[serde(rename = "http-01")]
+    Http01,
 }
 
 #[derive(Clone, Debug, Deserialize)]

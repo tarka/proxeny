@@ -8,7 +8,6 @@ use tracing_log::log::info;
 use crate::certificates::store::CertStore;
 
 
-
 pub struct CertHandler {
     certstore: Arc<CertStore>,
 }
