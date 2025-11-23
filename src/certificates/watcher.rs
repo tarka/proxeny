@@ -74,8 +74,7 @@ impl CertWatcher {
             .collect::<Vec<Arc<HostCertificate>>>();
 
         for cert in certs {
-            let newcert = Arc::new(HostCertificate::new(cert.host.clone(),
-                                                        cert.keyfile.clone(),
+            let newcert = Arc::new(HostCertificate::new(cert.keyfile.clone(),
                                                         cert.certfile.clone())?);
             self.certstore.replace(newcert)?;
         }
