@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use camino::Utf8PathBuf;
+use http::Uri;
 use tracing::{debug, info};
 
 use crate::{
@@ -29,6 +30,15 @@ pub fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
 
 }
 
+
+fn uri_host(uri: &String) -> Result<String> {
+    let parsed = Uri::try_from(uri)?;
+    let host = parsed.host()
+        .context("Failed to find host in servername '{uri}'")?;
+    Ok(host.to_string())
+}
+
+
 // TODO: We currently use papaya to store lookup tables for multiple
 // server support. However we don't actually support multiple servers
 // in the config at the moment. This may change, so this is left in
@@ -52,8 +62,13 @@ impl CertStore {
             .map(|s| match &s.tls.config {
                 TlsConfigType::Files(tfc) => {
                     debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
-
                     let hostcert = HostCertificate::new(tfc.keyfile.clone(), tfc.certfile.clone())?;
+
+                    let server_host = uri_host(&s.hostname)?;
+                    if server_host != hostcert.host {
+                        bail!("Certificate {} doesn't match server host {}", hostcert.host, server_host);
+                    }
+
                     Ok(Arc::new(hostcert))
                 }
                 _ => unreachable!("Found filtered value")

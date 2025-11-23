@@ -4,9 +4,8 @@ pub mod watcher;
 
 use std::fs;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use http::Uri;
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
     pkey::{PKey, Private},
@@ -44,13 +43,6 @@ fn cn_host(cn: String) -> Result<String> {
     let host = cn.split('=')
         .nth(1)
         .or_err(ErrorType ::InvalidCert, "Failed to find host in cert 'CN=...'")?;
-    Ok(host.to_string())
-}
-
-fn uri_host(uri: &String) -> Result<String> {
-    let parsed = Uri::try_from(uri)?;
-    let host = parsed.host()
-        .context("Failed to find host in servername '{uri}'")?;
     Ok(host.to_string())
 }
 
