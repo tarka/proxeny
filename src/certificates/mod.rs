@@ -1,3 +1,5 @@
+
+pub mod acme;
 pub mod handler;
 pub mod store;
 pub mod watcher;
@@ -11,6 +13,7 @@ use pingora_boringssl::{
     pkey::{PKey, Private},
     x509::X509,
 };
+use tracing_log::log::info;
 
 #[derive(Debug)]
 pub struct HostCertificate {
@@ -27,6 +30,7 @@ impl HostCertificate {
 
         let host = cn_host(certs[0].subject_name().print_ex(0)
                          .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
+        info!("Certificate found: {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
 
         Ok(HostCertificate {
             host,

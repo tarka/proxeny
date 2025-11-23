@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pingora_boringssl::ssl::NameType;
 use pingora_core::{listeners::TlsAccept, protocols::tls::TlsRef};
-use tracing_log::log::info;
+use tracing_log::log::{debug, info};
 
 use crate::certificates::store::CertStore;
 
@@ -38,10 +38,10 @@ impl TlsAccept for CertHandler {
         let pmap = self.certstore.by_host.pin();
         let cert = pmap.get(&host.to_string())
             .expect("Certificate for host not found");
+        debug!("Found certificate for {host}");
 
         ssl.set_private_key(&cert.key)
             .expect("Failed to set private key");
-        info!("Certificate found: {:?}, expires {}", cert.certs[0].subject_name(), cert.certs[0].not_after());
         ssl.set_certificate(&cert.certs[0])
             .expect("Failed to set certificate");
 
