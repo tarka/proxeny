@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
+use futures::{future::{join_all, try_join_all}, stream, StreamExt, TryStreamExt};
 use http::Uri;
 use tracing::{debug, info};
 
@@ -54,26 +55,28 @@ pub struct CertStore {
 
 
 impl CertStore {
-    pub fn new(config: &Config) -> Result<Self> {
+    pub async fn new(config: &Config) -> Result<Self> {
         info!("Loading host certificates");
 
-        let certs = config.servers().iter()
-            .filter(|s| matches!(s.tls.config, TlsConfigType::Files(_)))
-            .map(|s| match &s.tls.config {
-                TlsConfigType::Files(tfc) => {
-                    debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
-                    let hostcert = HostCertificate::new(tfc.keyfile.clone(), tfc.certfile.clone())?;
+        let certs = stream::iter(config.servers())
+            .then(|s| async move {
+                match &s.tls.config {
+                    TlsConfigType::Files(tfc) => {
+                        debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
+                        let hostcert = HostCertificate::new(tfc.keyfile.clone(), tfc.certfile.clone()).await?;
 
-                    let server_host = uri_host(&s.hostname)?;
-                    if server_host != hostcert.host {
-                        bail!("Certificate {} doesn't match server host {}", hostcert.host, server_host);
+                        let server_host = uri_host(&s.hostname)?;
+                        if server_host != hostcert.host {
+                            bail!("Certificate {} doesn't match server host {}", hostcert.host, server_host);
+                        }
+
+                        Ok(hostcert)
                     }
-
-                    Ok(Arc::new(hostcert))
+                    _ => unimplemented!("ACME goes here")
                 }
-                _ => unreachable!("Found filtered value")
             })
-            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
+            .then(|rhc| async move { rhc.map(Arc::new) })
+            .try_collect::<Vec<Arc<HostCertificate>>>().await?;
 
         let by_host = certs.iter()
             .map(|cert| (cert.host.clone(),

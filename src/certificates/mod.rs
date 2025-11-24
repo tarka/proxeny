@@ -4,7 +4,7 @@ pub mod handler;
 pub mod store;
 pub mod watcher;
 
-use std::fs;
+use tokio::fs;
 
 use anyhow::{bail, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -25,8 +25,8 @@ pub struct HostCertificate {
 }
 
 impl HostCertificate {
-    pub fn new(keyfile: Utf8PathBuf, certfile: Utf8PathBuf) -> Result<Self> {
-        let (key, certs) = load_certs(&keyfile, &certfile)?;
+    pub async fn new(keyfile: Utf8PathBuf, certfile: Utf8PathBuf) -> Result<Self> {
+        let (key, certs) = load_certs(&keyfile, &certfile).await?;
 
         let host = cn_host(certs[0].subject_name().print_ex(0)
                          .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
@@ -50,9 +50,9 @@ fn cn_host(cn: String) -> Result<String> {
     Ok(host.to_string())
 }
 
-fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
-    let kdata = fs::read(keyfile)?;
-    let cdata = fs::read(certfile)?;
+async fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
+    let kdata = fs::read(keyfile).await?;
+    let cdata = fs::read(certfile).await?;
 
     let key = PKey::private_key_from_pem(&kdata)?;
     let certs = X509::stack_from_pem(&cdata)?;

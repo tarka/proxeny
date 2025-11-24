@@ -7,6 +7,7 @@ use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use pingora_runtime::Runtime;
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
