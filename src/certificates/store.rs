@@ -52,35 +52,18 @@ pub struct CertStore {
     pub watchlist: Vec<Utf8PathBuf>,
 }
 
-
 impl CertStore {
     pub fn new(config: &Config) -> Result<Self> {
         info!("Loading host certificates");
 
-        let certs = config.servers().iter()
-            .filter(|s| matches!(s.tls.config, TlsConfigType::Files(_)))
-            .map(|s| match &s.tls.config {
-                TlsConfigType::Files(tfc) => {
-                    debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
-                    let hostcert = HostCertificate::new(tfc.keyfile.clone(), tfc.certfile.clone())?;
+        let local_certs = read_local_certs(config)?;
 
-                    let server_host = uri_host(&s.hostname)?;
-                    if server_host != hostcert.host {
-                        bail!("Certificate {} doesn't match server host {}", hostcert.host, server_host);
-                    }
-
-                    Ok(Arc::new(hostcert))
-                }
-                _ => unreachable!("Found filtered value")
-            })
-            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
-
-        let by_host = certs.iter()
+        let by_host = local_certs.iter()
             .map(|cert| (cert.host.clone(),
                          cert.clone()))
             .collect();
 
-        let by_file = certs.iter()
+        let by_file = local_certs.iter()
             .flat_map(|cert| {
                 vec!((cert.keyfile.clone(), cert.clone()),
                      (cert.certfile.clone(), cert.clone()))
@@ -95,7 +78,7 @@ impl CertStore {
             watchlist,
         };
 
-        info!("Loaded {} certificates", certs.len());
+        info!("Loaded {} certificates", local_certs.len());
 
         Ok(certstore)
     }
@@ -121,4 +104,25 @@ impl CertStore {
             .cloned()
             .collect()
     }
+}
+
+fn read_local_certs(config: &Config) -> Result<Vec<Arc<HostCertificate>>> {
+    config.servers().iter()
+        // FIXME: Remove for ACME
+        .filter(|s| matches!(s.tls.config, TlsConfigType::Files(_)))
+        .map(|s| match &s.tls.config {
+            TlsConfigType::Files(tfc) => {
+                debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
+                let hostcert = HostCertificate::new(tfc.keyfile.clone(), tfc.certfile.clone())?;
+
+                let server_host = uri_host(&s.hostname)?;
+                if server_host != hostcert.host {
+                    bail!("Certificate {} doesn't match server host {}", hostcert.host, server_host);
+                }
+
+                Ok(Arc::new(hostcert))
+            }
+            _ => unreachable!("ACME goes here")
+        })
+        .collect::<Result<Vec<Arc<HostCertificate>>>>()
 }

@@ -11,7 +11,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{store::CertStore, watcher::CertWatcher},
+    certificates::{acme::Acme, store::CertStore, watcher::CertWatcher},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -39,7 +39,6 @@ fn main() -> Result<()> {
 
     let config_file = cli.config
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
-
     let config = Arc::new(Config::from_file(&config_file)?);
 
     let certstore = Arc::new(CertStore::new(&config)?);
