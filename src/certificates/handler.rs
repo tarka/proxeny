@@ -35,8 +35,7 @@ impl TlsAccept for CertHandler {
         // guard lifetimes make it pointless (we'd have to generate a
         // guard here anyway). There may be another way to do it
         // cleanly?
-        let pmap = self.certstore.by_host.pin();
-        let cert = pmap.get(&host.to_string())
+        let cert = self.certstore.by_host(&host.to_string())
             .expect("Certificate for host not found");
         debug!("Found certificate for {host}");
 

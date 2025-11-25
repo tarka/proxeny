@@ -31,7 +31,7 @@ impl CertWatcher {
     pub fn watch(&self) -> Result<()> {
 
         let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, self.tx.clone())?;
-        for f in &self.certstore.watchlist {
+        for f in &self.certstore.watchlist() {
             info!("Starting watch of {f}");
             watcher.watch(f, RecursiveMode::NonRecursive)?;
         }
@@ -67,15 +67,14 @@ impl CertWatcher {
                     .expect("Invalid path encoding: {path}")
                     .canonicalize_utf8()
                     .expect("Invalid UTF8 path: {path}");
-                self.certstore.by_file.pin().get(&up)
+                self.certstore.by_file(&up)
                     .expect("Unexpected cert path: {up}")
                     .clone()
             })
             .collect::<Vec<Arc<HostCertificate>>>();
 
         for cert in certs {
-            let newcert = Arc::new(HostCertificate::new(cert.keyfile.clone(),
-                                                        cert.certfile.clone())?);
+            let newcert = Arc::new(HostCertificate::from(&cert)?);
             self.certstore.replace(newcert)?;
         }
 

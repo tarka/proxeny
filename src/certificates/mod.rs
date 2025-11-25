@@ -1,10 +1,11 @@
 
 pub mod acme;
+pub mod external;
 pub mod handler;
 pub mod store;
 pub mod watcher;
 
-use std::fs;
+use std::{fs, sync::Arc};
 
 use anyhow::{bail, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -22,10 +23,11 @@ pub struct HostCertificate {
     key: PKey<Private>,
     certfile: Utf8PathBuf,
     certs: Vec<X509>,
+    watch: bool,
 }
 
 impl HostCertificate {
-    pub fn new(keyfile: Utf8PathBuf, certfile: Utf8PathBuf) -> Result<Self> {
+    pub fn new(keyfile: Utf8PathBuf, certfile: Utf8PathBuf, watch: bool) -> Result<Self> {
         let (key, certs) = load_certs(&keyfile, &certfile)?;
 
         let host = cn_host(certs[0].subject_name().print_ex(0)
@@ -38,9 +40,18 @@ impl HostCertificate {
             key,
             certfile,
             certs,
+            watch,
         })
     }
 
+    pub fn from(hc: &Arc<HostCertificate>) -> Result<HostCertificate> {
+        HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
+    }
+
+}
+
+pub trait CertificateProvider {
+    fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>>;
 }
 
 fn cn_host(cn: String) -> Result<String> {

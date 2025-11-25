@@ -11,7 +11,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{acme::Acme, store::CertStore, watcher::CertWatcher},
+    certificates::{acme::Acme, external::ExternalProvider, store::CertStore, watcher::CertWatcher, CertificateProvider},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -41,7 +41,11 @@ fn main() -> Result<()> {
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     let config = Arc::new(Config::from_file(&config_file)?);
 
-    let certstore = Arc::new(CertStore::new(&config)?);
+    let extcerts = ExternalProvider::new(config.clone());
+    let certs = extcerts.read_certs()?;
+
+    let certstore = Arc::new(CertStore::new(certs)?);
+
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 
     let server_handle = {
