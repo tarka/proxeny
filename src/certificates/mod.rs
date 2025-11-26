@@ -85,6 +85,13 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
     if certs.is_empty() {
         bail!("No certificates found in TLS .crt file");
     }
+
+    // Verify that the private key matches the first certificate
+    let cert_pubkey = certs[0].public_key()?;
+    if !key.public_eq(&cert_pubkey) {
+        bail!("Private key does not match the certificate");
+    }
+
     Ok((key, certs))
 }
 
@@ -93,4 +100,64 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
 
 pub trait CertificateProvider {
     fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_load_certs_valid_pair() -> Result<()> {
+        let key_path = Utf8Path::new("tests/data/certs/snakeoil.key");
+        let cert_path = Utf8Path::new("tests/data/certs/snakeoil.crt");
+
+        let result = load_certs(key_path, cert_path);
+        assert!(result.is_ok());
+
+        let (key, certs) = result.unwrap();
+        assert!(!certs.is_empty());
+
+        let cert_pubkey = certs[0].public_key()?;
+        assert!(key.public_eq(&cert_pubkey));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_certs_invalid_pair() -> Result<()> {
+        let key_path = Utf8Path::new("tests/data/certs/snakeoil.key");
+        let other_cert_path = Utf8Path::new("tests/data/certs/snakeoil-2.pem");
+
+        let result = load_certs(key_path, other_cert_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Private key does not match the certificate"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_certs_nonexistent_files() {
+        let key_path = Utf8Path::new("nonexistent.key");
+        let cert_path = Utf8Path::new("nonexistent.crt");
+
+        let result = load_certs(key_path, cert_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_certs_empty_cert_file() -> Result<()> {
+        let mut empty_cert_file = NamedTempFile::new()?;
+        empty_cert_file.write_all(b"")?;
+        let empty_cert_path = Utf8PathBuf::from(empty_cert_file.path().to_str().unwrap());
+
+        let key_path = Utf8Path::new("tests/data/certs/snakeoil.key");
+
+        let result = load_certs(&key_path, &empty_cert_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No certificates found in TLS .crt file"));
+
+        Ok(())
+    }
 }
