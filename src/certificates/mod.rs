@@ -5,7 +5,7 @@ pub mod handler;
 pub mod store;
 pub mod watcher;
 
-use std::{fs, sync::Arc};
+use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 
 use anyhow::{bail, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -50,8 +50,23 @@ impl HostCertificate {
 
 }
 
-pub trait CertificateProvider {
-    fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>>;
+impl PartialEq<HostCertificate> for HostCertificate {
+    fn eq(&self, other: &Self) -> bool {
+        self.host == other.host
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.host != other.host
+    }
+}
+
+impl Eq for HostCertificate {
+}
+
+impl Hash for HostCertificate {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.host.hash(state)
+    }
 }
 
 fn cn_host(cn: String) -> Result<String> {
@@ -73,3 +88,9 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
     Ok((key, certs))
 }
 
+
+
+
+pub trait CertificateProvider {
+    fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>>;
+}
