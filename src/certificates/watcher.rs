@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
 use crossbeam_channel::{self as cbc, Receiver, Sender, select};
 use itertools::Itertools;
@@ -8,7 +8,7 @@ use notify::{EventKind, RecursiveMode};
 use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
 use tracing::{info, warn};
 
-use crate::certificates::{HostCertificate, store::CertStore};
+use crate::certificates::store::CertStore;
 
 
 const RELOAD_GRACE: Duration = Duration::from_millis(1500);
@@ -63,20 +63,14 @@ impl CertWatcher {
             .flat_map(|dev| dev.paths.clone())
             .unique()
             .map(|path| {
-                let up = Utf8PathBuf::from_path_buf(path)
-                    .expect("Invalid path encoding: {path}")
-                    .canonicalize_utf8()
-                    .expect("Invalid UTF8 path: {path}");
-                self.certstore.by_file(&up)
-                    .expect("Unexpected cert path: {up}")
-                    .clone()
+                let cert_path = Utf8PathBuf::from_path_buf(path)
+                    .map_err(|p| anyhow!("Invalid path encoding: {p:#?}"))?
+                    .canonicalize_utf8()?;
+                Ok(cert_path)
             })
-            .collect::<Vec<Arc<HostCertificate>>>();
+            .collect::<Result<Vec<Utf8PathBuf>>>()?;
 
-        for cert in certs {
-            let newcert = Arc::new(HostCertificate::from(&cert)?);
-            self.certstore.replace(newcert)?;
-        }
+        self.certstore.file_update(certs)?;
 
         Ok(())
     }

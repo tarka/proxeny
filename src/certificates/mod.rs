@@ -16,6 +16,8 @@ use pingora_boringssl::{
 };
 use tracing_log::log::info;
 
+use crate::errors::ProxenyError;
+
 #[derive(Debug)]
 pub struct HostCertificate {
     host: String,
@@ -27,6 +29,11 @@ pub struct HostCertificate {
 }
 
 impl HostCertificate {
+
+    /// Load and check a public/private keypair & certs. Checks are
+    /// performed, and Error::CertificateMismatch may be returned; as
+    /// this may be expected (e.g. while certs are being updated) it
+    /// should be checked for if necessary.
     pub fn new(keyfile: Utf8PathBuf, certfile: Utf8PathBuf, watch: bool) -> Result<Self> {
         let (key, certs) = load_certs(&keyfile, &certfile)?;
 
@@ -44,6 +51,8 @@ impl HostCertificate {
         })
     }
 
+    /// Generates a fresh certificate from an existing one. This is
+    /// effectively a reload.
     pub fn from(hc: &Arc<HostCertificate>) -> Result<HostCertificate> {
         HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
     }
@@ -86,21 +95,24 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
         bail!("No certificates found in TLS .crt file");
     }
 
-    // Verify that the private key matches the first certificate
+    // Verify that the private key and cert match
     let cert_pubkey = certs[0].public_key()?;
     if !key.public_eq(&cert_pubkey) {
-        bail!("Private key does not match the certificate");
+        let err = ProxenyError::CertificateMismatch(
+            keyfile.to_path_buf(),
+            certfile.to_path_buf())
+            .into();
+        return Err(err)
     }
 
     Ok((key, certs))
 }
 
 
-
-
 pub trait CertificateProvider {
     fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>>;
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -132,7 +144,8 @@ mod tests {
 
         let result = load_certs(key_path, other_cert_path);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Private key does not match the certificate"));
+        let err: ProxenyError = result.unwrap_err().downcast()?;
+        assert!(matches!(err, ProxenyError::CertificateMismatch(_, _)));
 
         Ok(())
     }

@@ -27,6 +27,7 @@ pingora-http = "0.6.0"
 pingora-proxy = "0.6.0"
 pingora-boringssl = "0.6.0"
 path-tree = "0.8.3"
+thiserror = "2.0.17"
 
 [lints.rust]
 # FIXME: For early dev, remove before release
