@@ -31,9 +31,9 @@ impl CertWatcher {
     pub fn watch(&self) -> Result<()> {
 
         let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, self.tx.clone())?;
-        for f in &self.certstore.watchlist() {
-            info!("Starting watch of {f}");
-            watcher.watch(f, RecursiveMode::NonRecursive)?;
+        for file in &self.certstore.watchlist() {
+            info!("Starting watch of {file}");
+            watcher.watch(file, RecursiveMode::NonRecursive)?;
         }
 
         loop {
@@ -81,4 +81,70 @@ impl CertWatcher {
         Ok(())
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::certificates::HostCertificate;
+    use std::fs;
+    use std::thread;
+    use tempfile::tempdir;
+
+    fn test_host_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
+        let keyfile = Utf8PathBuf::from(key);
+        let certfile = Utf8PathBuf::from(cert);
+        HostCertificate::new(keyfile, certfile, watch)
+            .expect("Failed to create test HostCertificate")
+    }
+
+    #[test]
+    fn test_cert_watcher_file_updates() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let key_path = temp_dir.path().join("test.key");
+        let cert_path = temp_dir.path().join("test.crt");
+
+        fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
+        fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+
+        let host_cert = Arc::new(test_host_cert(
+            key_path.to_str().unwrap(),
+            cert_path.to_str().unwrap(),
+            true,
+        ));
+        let certs = vec![host_cert.clone()];
+        let store = Arc::new(CertStore::new(certs)?);
+        let original_host = host_cert.host.clone();
+
+        let original_cert = store.by_host(&original_host).unwrap();
+        let original_expiry = original_cert.certs[0].not_after().to_string();
+
+        let watcher = Arc::new(CertWatcher::new(store.clone()));
+        let watcher_clone = watcher.clone();
+
+        let watcher_thread = thread::spawn(move || {
+            watcher_clone.watch()
+        });
+
+        // Wait for the watcher to start
+        thread::sleep(Duration::from_millis(100));
+
+        // Update the files
+        fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
+        fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+
+        // Wait for the watcher to process the event
+        thread::sleep(RELOAD_GRACE + Duration::from_millis(500));
+
+        let updated_cert = store.by_host(&original_host).unwrap();
+        let updated_expiry = updated_cert.certs[0].not_after().to_string();
+
+        assert_ne!(original_expiry, updated_expiry);
+
+        // Stop the watcher
+        watcher.quit()?;
+        watcher_thread.join().unwrap()?;
+
+        Ok(())
+    }
 }

@@ -79,9 +79,10 @@ impl Hash for HostCertificate {
 }
 
 fn cn_host(cn: String) -> Result<String> {
-    let host = cn.split('=')
-        .nth(1)
-        .or_err(ErrorType ::InvalidCert, "Failed to find host in cert 'CN=...'")?;
+    let host = cn.split(',')
+        .find_map(|s| s.trim().strip_prefix("CN="))
+        .or_err(ErrorType::InvalidCert, "Failed to find host in cert 'CN=...'")?
+        .trim();
     Ok(host.to_string())
 }
 
@@ -119,6 +120,39 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_cn_host_valid_cn() -> Result<()> {
+        let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd, CN=proxeny.example.com".to_string();
+        let host = cn_host(cn_string)?;
+        assert_eq!(host, "proxeny.example.com");
+        Ok(())
+    }
+
+    #[test]
+    fn test_cn_host_no_cn() {
+        let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd".to_string();
+        let result = cn_host(cn_string);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Failed to find host in cert 'CN=...'"));
+    }
+
+    #[test]
+    fn test_cn_host_multiple_equals_in_cn() -> Result<()> {
+        let cn_string = "C=US, O=Example Inc., CN=my.host=name.com".to_string();
+        let host = cn_host(cn_string)?;
+        assert_eq!(host, "my.host=name.com");
+        Ok(())
+    }
+
+    #[test]
+    fn test_cn_host_cn_with_spaces() -> Result<()> {
+        let cn_string = "C=US, CN=  another.example.com  ".to_string();
+        let host = cn_host(cn_string)?;
+        // strip_prefix also trims, so the result should be trimmed
+        assert_eq!(host, "another.example.com");
+        Ok(())
+    }
 
     #[test]
     fn test_load_certs_valid_pair() -> Result<()> {
