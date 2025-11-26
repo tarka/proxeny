@@ -8,28 +8,9 @@ use tracing_log::log::warn;
 
 use crate::{
     certificates::HostCertificate,
-    config::{Config, TlsConfigType, TlsFilesConfig}, errors::ProxenyError,
+    errors::ProxenyError,
 };
 
-
-pub fn gen_watchlist(config: &Config) -> Vec<Utf8PathBuf> {
-    // We only watch user-supplied certs that are flagged to
-    // reload. Acme certs are ignored.
-
-    config.servers().iter()
-        .filter_map(|s| match &s.tls.config {
-            TlsConfigType::Files(TlsFilesConfig {keyfile, certfile, reload: true}) => {
-                Some(vec![
-                    keyfile.clone(),
-                    certfile.clone(),
-                ])
-            }
-            _ => None
-        })
-        .flatten()
-        .collect()
-
-}
 
 
 // TODO: We currently use papaya to store lookup tables for multiple
@@ -63,7 +44,7 @@ impl CertStore {
         let certstore = Self {
             certs,
             by_host,
-            by_file: by_file,
+            by_file,
         };
         Ok(certstore)
     }
