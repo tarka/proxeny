@@ -7,7 +7,7 @@ use tracing::info;
 use tracing_log::log::warn;
 
 use crate::{
-    certificates::HostCertificate,
+    certificates::{CertificateProvider, HostCertificate},
     errors::ProxenyError,
 };
 
@@ -24,8 +24,16 @@ pub struct CertStore {
 }
 
 impl CertStore {
-    pub fn new(certs: Vec<Arc<HostCertificate>>) -> Result<Self> {
+
+    pub fn new(providers: Vec<impl CertificateProvider>) -> Result<Self> {
         info!("Loading host certificates");
+
+        let certs = providers.iter()
+            .map(|cp| cp.read_certs())
+            .collect::<Result<Vec<Vec<Arc<HostCertificate>>>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<Arc<HostCertificate>>>();
 
         let by_host = certs.iter()
             .map(|cert| (cert.host.clone(),
@@ -132,77 +140,91 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use std::fs;
-
-    fn test_host_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
-        let keyfile = Utf8PathBuf::from(key);
-        let certfile = Utf8PathBuf::from(cert);
-        HostCertificate::new(keyfile, certfile, watch)
-            .expect("Failed to create test HostCertificate")
-    }
+    use crate::certificates::tests::*;
 
     #[test]
     fn test_cert_store_new() {
-        let cert = Arc::new(test_host_cert(
+        let provider = TestProvider::new(
             "tests/data/certs/snakeoil.key",
             "tests/data/certs/snakeoil.crt",
             false
-        ));
-        let certs = vec![cert.clone()];
-        let store = CertStore::new(certs).unwrap();
+        );
+        let store = CertStore::new(vec![provider.clone()]).unwrap();
 
         assert_eq!(store.certs.len(), 1);
-        assert!(store.by_host(&cert.host).is_some());
+        assert!(store.by_host(&provider.cert.host).is_some());
         assert!(store.by_file(&"tests/data/certs/snakeoil.key".into()).is_some());
         assert!(store.by_file(&"tests/data/certs/snakeoil.crt".into()).is_some());
     }
 
     #[test]
     fn test_by_host() {
-        let cert = Arc::new(test_host_cert(
+        let provider = TestProvider::new(
             "tests/data/certs/snakeoil.key",
             "tests/data/certs/snakeoil.crt",
             false
-        ));
-        let certs = vec![cert.clone()];
-        let store = CertStore::new(certs).unwrap();
-        let found = store.by_host(&cert.host).unwrap();
+        );
+        let store = CertStore::new(vec![provider.clone()]).unwrap();
+        let found = store.by_host(&provider.cert.host).unwrap();
 
-        assert_eq!(found.host, cert.host);
+        assert_eq!(found.host, provider.cert.host);
     }
 
     #[test]
     fn test_by_file() {
-        let cert = Arc::new(test_host_cert(
+        let provider = TestProvider::new(
             "tests/data/certs/snakeoil.key",
             "tests/data/certs/snakeoil.crt",
             false
-        ));
-        let certs = vec![cert.clone()];
-        let store = CertStore::new(certs).unwrap();
+        );
+        let store = CertStore::new(vec![provider.clone()]).unwrap();
         let found = store.by_file(&"tests/data/certs/snakeoil.key".into()).unwrap();
 
-        assert_eq!(found.host, cert.host);
+        assert_eq!(found.host, provider.cert.host);
     }
 
     #[test]
     fn test_watchlist() {
-        let cert1 = Arc::new(test_host_cert(
+        let prov1 = TestProvider::new(
             "tests/data/certs/snakeoil.key",
             "tests/data/certs/snakeoil.crt",
             true
-        ));
-        let cert2 = Arc::new(test_host_cert(
+        );
+        let prov2 = TestProvider::new(
             "tests/data/certs/snakeoil-2.key",
             "tests/data/certs/snakeoil-2.pem",
             false
-        ));
-        let certs = vec![cert1, cert2];
-        let store = CertStore::new(certs).unwrap();
+        );
+        let providers = vec![prov1.clone(), prov2.clone()];
+        let store = CertStore::new(providers).unwrap();
         let watchlist = store.watchlist();
 
         assert_eq!(watchlist.len(), 2);
         assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.key")));
         assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.crt")));
+    }
+
+    #[test]
+    fn test_multi_provider() {
+        let prov1 = TestProvider::new(
+            "tests/data/certs/snakeoil.key",
+            "tests/data/certs/snakeoil.crt",
+            true
+        );
+        let prov2 = TestProvider::new(
+            "tests/data/certs/snakeoil-2.key",
+            "tests/data/certs/snakeoil-2.pem",
+            true
+        );
+        let providers = vec![prov1.clone(), prov2.clone()];
+        let store = CertStore::new(providers).unwrap();
+        let watchlist = store.watchlist();
+
+        assert_eq!(watchlist.len(), 4);
+        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.key")));
+        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.crt")));
+        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil-2.key")));
+        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil-2.pem")));
     }
 
     #[test]
@@ -213,14 +235,13 @@ mod tests {
         fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
         fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
 
-        let host_cert = Arc::new(test_host_cert(
+        let provider = TestProvider::new(
             key_path.to_str().unwrap(),
             cert_path.to_str().unwrap(),
             true
-        ));
-        let certs = vec![host_cert.clone()];
-        let store = CertStore::new(certs)?;
-        let original_host = host_cert.host.clone();
+        );
+        let store = CertStore::new(vec![provider.clone()])?;
+        let original_host = provider.cert.host.clone();
 
         // The original cert is snakeoil
         let first_cert = store.by_host(&original_host).unwrap();
@@ -233,7 +254,7 @@ mod tests {
         let updated_files = vec![key_path.clone().try_into()?, cert_path.clone().try_into()?];
         store.file_update(updated_files)?;
 
-        let updated_cert_from_file = test_host_cert(
+        let updated_cert_from_file = test_cert(
             key_path.to_str().unwrap(),
             cert_path.to_str().unwrap(),
             true
@@ -260,14 +281,13 @@ mod tests {
         fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
         fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
 
-        let host_cert = Arc::new(test_host_cert(
+        let provider = TestProvider::new(
             key_path.to_str().unwrap(),
             cert_path.to_str().unwrap(),
             true
-        ));
-        let certs = vec![host_cert.clone()];
-        let store = CertStore::new(certs)?;
-        let original_host = host_cert.host.clone();
+        );
+        let store = CertStore::new(vec![provider.clone()])?;
+        let original_host = provider.cert.host.clone();
 
         let first_cert = store.by_host(&original_host).unwrap();
 

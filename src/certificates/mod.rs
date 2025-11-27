@@ -121,6 +121,31 @@ mod tests {
     use std::io::Write;
     use tempfile::NamedTempFile;
 
+    // Common test utils
+    pub fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
+        let keyfile = Utf8PathBuf::from(key);
+        let certfile = Utf8PathBuf::from(cert);
+        HostCertificate::new(keyfile, certfile, watch)
+            .expect("Failed to create test HostCertificate")
+    }
+
+    #[derive(Clone)]
+    pub struct TestProvider {
+        pub cert: Arc<HostCertificate>
+    }
+    impl TestProvider {
+        pub fn new(key: &str, cert: &str, watch: bool) -> Self {
+            let cert = test_cert(key, cert, watch);
+            Self { cert: Arc::new(cert) }
+        }
+    }
+    impl CertificateProvider for TestProvider {
+        fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>> {
+            Ok(vec![self.cert.clone()])
+        }
+    }
+
+
     #[test]
     fn test_cn_host_valid_cn() -> Result<()> {
         let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd, CN=proxeny.example.com".to_string();

@@ -43,10 +43,11 @@ fn main() -> Result<()> {
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     let config = Arc::new(Config::from_file(&config_file)?);
 
-    let extcerts = ExternalProvider::new(config.clone());
-    let certs = extcerts.read_certs()?;
+    let providers = vec![
+        ExternalProvider::new(config.clone()),
+    ];
 
-    let certstore = Arc::new(CertStore::new(certs)?);
+    let certstore = Arc::new(CertStore::new(providers)?);
 
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 

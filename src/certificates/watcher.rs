@@ -86,17 +86,11 @@ impl CertWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::certificates::HostCertificate;
     use std::fs;
     use std::thread;
     use tempfile::tempdir;
-
-    fn test_host_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
-        let keyfile = Utf8PathBuf::from(key);
-        let certfile = Utf8PathBuf::from(cert);
-        HostCertificate::new(keyfile, certfile, watch)
-            .expect("Failed to create test HostCertificate")
-    }
+    use crate::certificates::HostCertificate;
+    use crate::certificates::tests::*;
 
     #[test]
     fn test_cert_watcher_file_updates() -> Result<()> {
@@ -107,14 +101,13 @@ mod tests {
         fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
         fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
 
-        let host_cert = Arc::new(test_host_cert(
+        let provider = TestProvider::new(
             key_path.to_str().unwrap(),
             cert_path.to_str().unwrap(),
             true,
-        ));
-        let certs = vec![host_cert.clone()];
-        let store = Arc::new(CertStore::new(certs)?);
-        let original_host = host_cert.host.clone();
+        );
+        let store = Arc::new(CertStore::new(vec![provider.clone()])?);
+        let original_host = provider.cert.host.clone();
 
         let original_cert = store.by_host(&original_host).unwrap();
         let original_expiry = original_cert.certs[0].not_after().to_string();
