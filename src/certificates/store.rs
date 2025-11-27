@@ -30,8 +30,6 @@ impl CertStore {
 
         let certs = providers.iter()
             .map(|cp| cp.read_certs())
-            .collect::<Result<Vec<Vec<Arc<HostCertificate>>>>>()?
-            .into_iter()
             .flatten()
             .collect::<Vec<Arc<HostCertificate>>>();
 

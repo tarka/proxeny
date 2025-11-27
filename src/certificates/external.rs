@@ -20,18 +20,12 @@ fn uri_host(uri: &String) -> Result<String> {
 /// Externally managed certificates
 pub struct ExternalProvider {
     config: Arc<Config>,
+    certs: Vec<Arc<HostCertificate>>,
 }
 
 impl ExternalProvider {
-    pub fn new(config: Arc<Config>) -> Self {
-        Self { config }
-    }
-}
-
-impl CertificateProvider for ExternalProvider {
-
-    fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>> {
-        self.config.servers().iter()
+    pub fn new(config: Arc<Config>) -> Result<Self> {
+        let certs = config.servers().iter()
             .filter_map(|s| match &s.tls.config {
                 TlsConfigType::Files(tfc) => {
                     // Wrapper closure for `?` clarity
@@ -53,7 +47,19 @@ impl CertificateProvider for ExternalProvider {
                 }
                 _ => None
             })
-            .collect::<Result<Vec<Arc<HostCertificate>>>>()
+            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
+
+        Ok(Self {
+            config,
+            certs,
+        })
+    }
+}
+
+impl CertificateProvider for ExternalProvider {
+
+    fn read_certs(&self) -> Vec<Arc<HostCertificate>> {
+        self.certs.clone()
     }
 
 }

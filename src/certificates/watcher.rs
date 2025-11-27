@@ -89,7 +89,6 @@ mod tests {
     use std::fs;
     use std::thread;
     use tempfile::tempdir;
-    use crate::certificates::HostCertificate;
     use crate::certificates::tests::*;
 
     #[test]

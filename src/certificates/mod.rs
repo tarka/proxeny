@@ -111,7 +111,7 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
 
 
 pub trait CertificateProvider {
-    fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>>;
+    fn read_certs(&self) -> Vec<Arc<HostCertificate>>;
 }
 
 
@@ -140,8 +140,8 @@ mod tests {
         }
     }
     impl CertificateProvider for TestProvider {
-        fn read_certs(&self) -> Result<Vec<Arc<HostCertificate>>> {
-            Ok(vec![self.cert.clone()])
+        fn read_certs(&self) -> Vec<Arc<HostCertificate>> {
+            vec![self.cert.clone()]
         }
     }
 
