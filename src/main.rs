@@ -9,7 +9,7 @@ use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use crossbeam_channel::{bounded, Receiver, Sender};
+use tokio::sync::{mpsc, watch};
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
@@ -36,31 +36,31 @@ fn init_logging(level: u8) -> Result<()> {
 
 // TODO: Should be in certificates/mod.rs?
 pub struct Context {
-    pub quit_tx: Sender<()>,
-    pub quit_rx: Receiver<()>,
+    pub quit_tx: watch::Sender<bool>,
+    pub quit_rx: watch::Receiver<bool>,
 
-    pub cert_tx: Sender<Arc<HostCertificate>>,
-    pub cert_rx: Receiver<Arc<HostCertificate>>,
+    pub cert_tx: mpsc::Sender<Arc<HostCertificate>>,
+    pub cert_rx: mpsc::Receiver<Arc<HostCertificate>>,
 }
 
 impl Context {
     pub fn new() -> Self {
-        let (quit_tx, quit_rx) = bounded(1);
-        let (cert_tx, cert_rx) = bounded(1);
+        let (quit_tx, quit_rx) = watch::channel(false);
+        let (cert_tx, cert_rx) = mpsc::channel(8);
         Self {
             quit_tx, quit_rx,
             cert_tx, cert_rx,
         }
     }
 
-    pub fn send_cert(&self, cert: Arc<HostCertificate>) -> Result<()> {
-        self.cert_tx.send(cert)?;
-        Ok(())
-    }
+    // pub fn send_cert(&self, cert: Arc<HostCertificate>) -> Result<()> {
+    //     self.cert_tx.send(cert)?;
+    //     Ok(())
+    // }
 
     pub fn quit(&self) -> Result<()> {
-        info!("Sending watcher quit signal");
-        self.quit_tx.send(())?;
+        info!("Sending quit signal to runtimes");
+        self.quit_tx.send(true)?;
         Ok(())
     }
 }
@@ -87,31 +87,31 @@ fn main() -> Result<()> {
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
 
-    let certwatcher = Arc::new(CertWatcher::new(certstore.clone(), context.clone()));
-    let watcher_handle = thread::spawn(move || -> Result<()> {
-        info!("Starting cert watcher");
-        certwatcher.watch()?;
-        Ok(())
-    });
+    let certwatcher = CertWatcher::new(certstore.clone(), context.clone());
 
-    let server_handle = {
-        let certstore = certstore.clone();
-        let config = config.clone();
+
+    ///// Runtime start
+
+    let cert_handle = {
         thread::spawn(move || -> Result<()> {
-            info!("Starting Proxy");
-            proxy::run_indefinitely(certstore, config)?;
+            info!("Starting Certificate Management runtime");
+            let cert_runtime = tokio::runtime::Builder::new_current_thread()
+                .build()?;
+            cert_runtime.block_on(async move {
+                let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
+                watcher_handle.await
+            })??;
+
             Ok(())
         })
     };
 
-    // Wait for pingora to shut down, then signal the rest
-    server_handle.join()
-        .expect("Failed to finalise server task")?;
+    info!("Starting Proxeny");
+    proxy::run_indefinitely(certstore, config)?;
 
     context.quit()?;
-
-    watcher_handle.join()
-        .expect("Failed to finalise watcher task")?;
+    cert_handle.join()
+        .expect("Failed to finalise certificate management tasks")?;
 
     info!("Proxeny finished.");
     Ok(())

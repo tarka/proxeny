@@ -2300,7 +2300,6 @@ dependencies = [
  "axum",
  "camino",
  "clap 4.5.53",
- "crossbeam-channel",
  "ctor",
  "http",
  "http-serde",
