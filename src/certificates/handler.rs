@@ -31,10 +31,6 @@ impl TlsAccept for CertHandler {
 
         info!("TLS Host is {host}; loading certs");
 
-        // FIXME: This should be a `get()` in CertStore, but papaya
-        // guard lifetimes make it pointless (we'd have to generate a
-        // guard here anyway). There may be another way to do it
-        // cleanly?
         let cert = self.certstore.by_host(&host.to_string())
             .expect("Certificate for host not found");
         debug!("Found certificate for {host}");

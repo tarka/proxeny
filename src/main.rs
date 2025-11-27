@@ -9,6 +9,7 @@ use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use crossbeam_channel::{bounded, Receiver, Sender};
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
@@ -33,6 +34,31 @@ fn init_logging(level: u8) -> Result<()> {
     Ok(())
 }
 
+pub struct Context {
+    pub quit_tx: Sender<()>,
+    pub quit_rx: Receiver<()>,
+
+    pub cert_tx: Sender<Arc<HostCertificate>>,
+    pub cert_rx: Receiver<Arc<HostCertificate>>,
+}
+
+impl Context {
+    pub fn new() -> Self {
+        let (quit_tx, quit_rx) = bounded(1);
+        let (cert_tx, cert_rx) = bounded(1);
+        Self {
+            quit_tx, quit_rx,
+            cert_tx, cert_rx,
+        }
+    }
+
+    pub fn quit(&self) -> Result<()> {
+        info!("Sending watcher quit signal");
+        self.quit_tx.send(())?;
+        Ok(())
+    }
+}
+
 fn main() -> Result<()> {
     let cli = config::CliOptions::from_args();
 
@@ -43,6 +69,8 @@ fn main() -> Result<()> {
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     let config = Arc::new(Config::from_file(&config_file)?);
 
+    let context = Arc::new(Context::new());
+
     let providers = vec![
         ExternalProvider::new(config.clone())?,
     ];
@@ -51,8 +79,8 @@ fn main() -> Result<()> {
         .flatten()
         .collect();
 
-    let certstore = Arc::new(CertStore::new(certs)?);
-    let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
+    let certstore = Arc::new(CertStore::new(certs, context.clone())?);
+    let certwatcher = Arc::new(CertWatcher::new(certstore.clone(), context.clone()));
 
     let server_handle = {
         let certstore = certstore.clone();
@@ -76,7 +104,7 @@ fn main() -> Result<()> {
     server_handle.join()
         .expect("Failed to finalise server task")?;
 
-    certwatcher.quit()?;
+    context.quit()?;
     watcher_handle.join()
         .expect("Failed to finalise watcher task")?;
 

@@ -8,29 +8,31 @@ use notify::{EventKind, RecursiveMode};
 use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
 use tracing::{info, warn};
 
-use crate::certificates::store::CertStore;
+use crate::{certificates::store::CertStore, Context};
 
 
 const RELOAD_GRACE: Duration = Duration::from_millis(1500);
 
 pub struct CertWatcher {
+    context: Arc<Context>,
     certstore: Arc<CertStore>,
-    tx: Sender<DebounceEventResult>,
-    rx: Receiver<DebounceEventResult>,
-    q_tx: Sender<()>,
-    q_rx: Receiver<()>,
+    ev_tx: Sender<DebounceEventResult>,
+    ev_rx: Receiver<DebounceEventResult>,
 }
 
 impl CertWatcher {
-    pub fn new(certstore: Arc<CertStore>) -> Self {
-        let (tx, rx) = cbc::unbounded();
-        let (q_tx, q_rx) = cbc::bounded(1);
-        Self {certstore, tx, rx, q_tx, q_rx}
+    pub fn new(certstore: Arc<CertStore>, context: Arc<Context>) -> Self {
+        let (ev_tx, ev_rx) = cbc::unbounded();
+        Self {
+            context,
+            certstore,
+            ev_tx, ev_rx,
+        }
     }
 
     pub fn watch(&self) -> Result<()> {
 
-        let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, self.tx.clone())?;
+        let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, self.ev_tx.clone())?;
         for file in &self.certstore.watchlist() {
             info!("Starting watch of {file}");
             watcher.watch(file, RecursiveMode::NonRecursive)?;
@@ -38,11 +40,11 @@ impl CertWatcher {
 
         loop {
             select! {
-                recv(&self.q_rx) -> _r => {
+                recv(&self.context.quit_rx) -> _r => {
                     info!("Quitting certificate watcher loop.");
                     break;
                 },
-                recv(&self.rx) -> events => {
+                recv(&self.ev_rx) -> events => {
                     match events? {
                         Err(errs) => warn!("Received errors from cert watcher: {errs:#?}"),
                         Ok(evs) => self.process_events(evs)?,
@@ -75,12 +77,6 @@ impl CertWatcher {
         Ok(())
     }
 
-    pub fn quit(&self) -> Result<()> {
-        info!("Sending watcher quit signal");
-        self.q_tx.send(())?;
-        Ok(())
-    }
-
 }
 
 #[cfg(test)]
@@ -98,6 +94,8 @@ mod tests {
         let key_path = temp_dir.path().join("test.key");
         let cert_path = temp_dir.path().join("test.crt");
 
+        let context = Arc::new(Context::new());
+
         fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
         fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
 
@@ -106,13 +104,13 @@ mod tests {
             cert_path.to_str().unwrap(),
             true,
         );
-        let store = Arc::new(CertStore::new(provider.read_certs())?);
+        let store = Arc::new(CertStore::new(provider.read_certs(), context.clone())?);
         let original_host = provider.cert.host.clone();
 
         let original_cert = store.by_host(&original_host).unwrap();
         let original_expiry = original_cert.certs[0].not_after().to_string();
 
-        let watcher = Arc::new(CertWatcher::new(store.clone()));
+        let watcher = Arc::new(CertWatcher::new(store.clone(), context.clone()));
         let watcher_clone = watcher.clone();
 
         let watcher_thread = thread::spawn(move || {
@@ -135,7 +133,7 @@ mod tests {
         assert_ne!(original_expiry, updated_expiry);
 
         // Stop the watcher
-        watcher.quit()?;
+        context.quit()?;
         watcher_thread.join().unwrap()?;
 
         Ok(())
