@@ -34,6 +34,7 @@ fn init_logging(level: u8) -> Result<()> {
     Ok(())
 }
 
+// TODO: Should be in certificates/mod.rs?
 pub struct Context {
     pub quit_tx: Sender<()>,
     pub quit_rx: Receiver<()>,
@@ -50,6 +51,11 @@ impl Context {
             quit_tx, quit_rx,
             cert_tx, cert_rx,
         }
+    }
+
+    pub fn send_cert(&self, cert: Arc<HostCertificate>) -> Result<()> {
+        self.cert_tx.send(cert)?;
+        Ok(())
     }
 
     pub fn quit(&self) -> Result<()> {
@@ -80,7 +86,13 @@ fn main() -> Result<()> {
         .collect();
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
+
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone(), context.clone()));
+    let watcher_handle = thread::spawn(move || -> Result<()> {
+        info!("Starting cert watcher");
+        certwatcher.watch()?;
+        Ok(())
+    });
 
     let server_handle = {
         let certstore = certstore.clone();
@@ -92,19 +104,12 @@ fn main() -> Result<()> {
         })
     };
 
-    let watcher_handle = {
-        let certwatcher = certwatcher.clone();
-        thread::spawn(move || -> Result<()> {
-            info!("Starting cert watcher");
-            certwatcher.watch()?;
-            Ok(())
-        })
-    };
-
+    // Wait for pingora to shut down, then signal the rest
     server_handle.join()
         .expect("Failed to finalise server task")?;
 
     context.quit()?;
+
     watcher_handle.join()
         .expect("Failed to finalise watcher task")?;
 
