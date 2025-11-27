@@ -25,13 +25,8 @@ pub struct CertStore {
 
 impl CertStore {
 
-    pub fn new(providers: Vec<impl CertificateProvider>) -> Result<Self> {
+    pub fn new(certs: Vec<Arc<HostCertificate>>) -> Result<Self> {
         info!("Loading host certificates");
-
-        let certs = providers.iter()
-            .map(|cp| cp.read_certs())
-            .flatten()
-            .collect::<Vec<Arc<HostCertificate>>>();
 
         let by_host = certs.iter()
             .map(|cert| (cert.host.clone(),
@@ -147,7 +142,7 @@ mod tests {
             "tests/data/certs/snakeoil.crt",
             false
         );
-        let store = CertStore::new(vec![provider.clone()]).unwrap();
+        let store = CertStore::new(provider.read_certs()).unwrap();
 
         assert_eq!(store.certs.len(), 1);
         assert!(store.by_host(&provider.cert.host).is_some());
@@ -162,7 +157,7 @@ mod tests {
             "tests/data/certs/snakeoil.crt",
             false
         );
-        let store = CertStore::new(vec![provider.clone()]).unwrap();
+        let store = CertStore::new(provider.read_certs()).unwrap();
         let found = store.by_host(&provider.cert.host).unwrap();
 
         assert_eq!(found.host, provider.cert.host);
@@ -175,54 +170,33 @@ mod tests {
             "tests/data/certs/snakeoil.crt",
             false
         );
-        let store = CertStore::new(vec![provider.clone()]).unwrap();
+        let store = CertStore::new(provider.read_certs()).unwrap();
         let found = store.by_file(&"tests/data/certs/snakeoil.key".into()).unwrap();
 
         assert_eq!(found.host, provider.cert.host);
     }
 
     #[test]
-    fn test_watchlist() {
-        let prov1 = TestProvider::new(
-            "tests/data/certs/snakeoil.key",
-            "tests/data/certs/snakeoil.crt",
+    fn test_watchlist() -> Result<()> {
+        let hc1 = Arc::new(HostCertificate::new(
+            "tests/data/certs/snakeoil.key".into(),
+            "tests/data/certs/snakeoil.crt".into(),
             true
-        );
-        let prov2 = TestProvider::new(
-            "tests/data/certs/snakeoil-2.key",
-            "tests/data/certs/snakeoil-2.pem",
+        )?);
+        let hc2 = Arc::new(HostCertificate::new(
+            "tests/data/certs/snakeoil-2.key".into(),
+            "tests/data/certs/snakeoil-2.pem".into(),
             false
-        );
-        let providers = vec![prov1.clone(), prov2.clone()];
-        let store = CertStore::new(providers).unwrap();
+        )?);
+
+        let certs = vec![hc1, hc2];
+        let store = CertStore::new(certs).unwrap();
         let watchlist = store.watchlist();
 
         assert_eq!(watchlist.len(), 2);
         assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.key")));
         assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.crt")));
-    }
-
-    #[test]
-    fn test_multi_provider() {
-        let prov1 = TestProvider::new(
-            "tests/data/certs/snakeoil.key",
-            "tests/data/certs/snakeoil.crt",
-            true
-        );
-        let prov2 = TestProvider::new(
-            "tests/data/certs/snakeoil-2.key",
-            "tests/data/certs/snakeoil-2.pem",
-            true
-        );
-        let providers = vec![prov1.clone(), prov2.clone()];
-        let store = CertStore::new(providers).unwrap();
-        let watchlist = store.watchlist();
-
-        assert_eq!(watchlist.len(), 4);
-        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.key")));
-        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.crt")));
-        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil-2.key")));
-        assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil-2.pem")));
+        Ok(())
     }
 
     #[test]
@@ -238,7 +212,7 @@ mod tests {
             cert_path.to_str().unwrap(),
             true
         );
-        let store = CertStore::new(vec![provider.clone()])?;
+        let store = CertStore::new(provider.read_certs())?;
         let original_host = provider.cert.host.clone();
 
         // The original cert is snakeoil
@@ -284,7 +258,7 @@ mod tests {
             cert_path.to_str().unwrap(),
             true
         );
-        let store = CertStore::new(vec![provider.clone()])?;
+        let store = CertStore::new(provider.read_certs())?;
         let original_host = provider.cert.host.clone();
 
         let first_cert = store.by_host(&original_host).unwrap();

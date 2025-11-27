@@ -13,7 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{external::ExternalProvider, store::CertStore, watcher::CertWatcher},
+    certificates::{external::ExternalProvider, store::CertStore, watcher::CertWatcher, CertificateProvider, HostCertificate},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -46,8 +46,12 @@ fn main() -> Result<()> {
     let providers = vec![
         ExternalProvider::new(config.clone())?,
     ];
-    let certstore = Arc::new(CertStore::new(providers)?);
+    let certs = providers.iter()
+        .map(|cp| cp.read_certs())
+        .flatten()
+        .collect();
 
+    let certstore = Arc::new(CertStore::new(certs)?);
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));
 
     let server_handle = {

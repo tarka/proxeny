@@ -89,6 +89,7 @@ mod tests {
     use std::fs;
     use std::thread;
     use tempfile::tempdir;
+    use crate::certificates::CertificateProvider;
     use crate::certificates::tests::*;
 
     #[test]
@@ -105,7 +106,7 @@ mod tests {
             cert_path.to_str().unwrap(),
             true,
         );
-        let store = Arc::new(CertStore::new(vec![provider.clone()])?);
+        let store = Arc::new(CertStore::new(provider.read_certs())?);
         let original_host = provider.cert.host.clone();
 
         let original_cert = store.by_host(&original_host).unwrap();
