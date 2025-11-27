@@ -46,7 +46,6 @@ fn main() -> Result<()> {
     let providers = vec![
         ExternalProvider::new(config.clone())?,
     ];
-
     let certstore = Arc::new(CertStore::new(providers)?);
 
     let certwatcher = Arc::new(CertWatcher::new(certstore.clone()));

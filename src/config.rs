@@ -50,7 +50,8 @@ where
 #[serde(rename_all = "lowercase")]
 pub enum AcmeProvider {
     LetsEncrypt,
-    ZeroSsl,
+    // TODO:
+    // ZeroSsl,
 }
 impl Default for AcmeProvider {
     fn default() -> Self {
