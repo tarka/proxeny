@@ -6,7 +6,7 @@ use itertools::Itertools;
 use notify::{EventKind, RecursiveMode};
 use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing_log::log::{info, warn};
 
 use crate::{certificates::store::CertStore, Context};
 
@@ -30,7 +30,7 @@ impl CertWatcher {
         }
     }
 
-    pub async fn watch(&self) -> Result<()> {
+    pub async fn watch(&mut self) -> Result<()> {
         info!("Starting cert watcher");
 
         let handler = {
@@ -47,16 +47,20 @@ impl CertWatcher {
         let mut quit_rx = self.context.quit_rx.clone();
         loop {
             tokio::select! {
+                events = self.ev_rx.recv() => {
+                    match events {
+                        Some(Err(errs)) => warn!("Received errors from cert watcher: {errs:#?}"),
+                        Some(Ok(evs)) => self.process_events(evs)?,
+                        None => {
+                            warn!("Notify watcher channel closed; quitting");
+                            break;
+                        }
+                    }
+                },
                 _ = quit_rx.changed() => {
                     info!("Quitting certificate watcher loop.");
                     break;
                 },
-                // Some(events) = &self.ev_rx.recv() => {
-                //     match events {
-                //         Err(errs) => warn!("Received errors from cert watcher: {errs:#?}"),
-                //         Ok(evs) => self.process_events(evs)?,
-                //     }
-                // }
             };
         }
 
@@ -64,6 +68,7 @@ impl CertWatcher {
     }
 
     fn process_events(&self, events: Vec<DebouncedEvent>) -> Result<()> {
+        info!("Processing {} files update events", events.len());
         let certs = events.into_iter()
             .filter(|dev| matches!(dev.event.kind,
                                    EventKind::Create(_)
@@ -90,59 +95,60 @@ impl CertWatcher {
 mod tests {
     use super::*;
     use std::fs;
-    use std::thread;
     use tempfile::tempdir;
     use crate::certificates::CertificateProvider;
     use crate::certificates::tests::*;
 
-//     #[test]
-//     fn test_cert_watcher_file_updates() -> Result<()> {
-//         let temp_dir = tempdir()?;
-//         let key_path = temp_dir.path().join("test.key");
-//         let cert_path = temp_dir.path().join("test.crt");
+    #[tokio::test]
+    async fn test_cert_watcher_file_updates() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let key_path = temp_dir.path().join("test.key");
+        let cert_path = temp_dir.path().join("test.crt");
 
-//         let context = Arc::new(Context::new());
+        let context = Arc::new(Context::new());
 
-//         fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
-//         fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+        fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
+        fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
 
-//         let provider = TestProvider::new(
-//             key_path.to_str().unwrap(),
-//             cert_path.to_str().unwrap(),
-//             true,
-//         );
-//         let store = Arc::new(CertStore::new(provider.read_certs(), context.clone())?);
-//         let original_host = provider.cert.host.clone();
+        let provider = TestProvider::new(
+            key_path.to_str().unwrap(),
+            cert_path.to_str().unwrap(),
+            true,
+        );
+        let store = Arc::new(CertStore::new(provider.read_certs(), context.clone())?);
+        let original_host = provider.cert.host.clone();
 
-//         let original_cert = store.by_host(&original_host).unwrap();
-//         let original_expiry = original_cert.certs[0].not_after().to_string();
+        let original_cert = store.by_host(&original_host).unwrap();
+        let original_expiry = original_cert.certs[0].not_after().to_string();
 
-//         let watcher = Arc::new(CertWatcher::new(store.clone(), context.clone()));
-//         let watcher_clone = watcher.clone();
+        let mut watcher = CertWatcher::new(store.clone(), context.clone());
 
-//         let watcher_thread = thread::spawn(move || {
-//             watcher_clone.watch()
-//         });
+        // Start the watcher in a separate task
+        let watcher_handle = tokio::spawn(async move {
+            watcher.watch().await
+        });
 
-//         // Wait for the watcher to start
-//         thread::sleep(Duration::from_millis(100));
+        // Wait for the watcher to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
-//         // Update the files
-//         fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
-//         fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+        // Update the files
+        info!("Updating cert files");
+        fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
+        fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
 
-//         // Wait for the watcher to process the event
-//         thread::sleep(RELOAD_GRACE + Duration::from_millis(500));
+        // Wait for the watcher to process the event
+        tokio::time::sleep(RELOAD_GRACE + Duration::from_millis(500)).await;
 
-//         let updated_cert = store.by_host(&original_host).unwrap();
-//         let updated_expiry = updated_cert.certs[0].not_after().to_string();
+        info!("Checking updated certs");
+        let updated_cert = store.by_host(&original_host).unwrap();
+        let updated_expiry = updated_cert.certs[0].not_after().to_string();
 
-//         assert_ne!(original_expiry, updated_expiry);
+        assert_ne!(original_expiry, updated_expiry);
 
-//         // Stop the watcher
-//         context.quit()?;
-//         watcher_thread.join().unwrap()?;
+        // Stop the watcher
+        context.quit()?;
+        watcher_handle.await??;
 
-//         Ok(())
-//     }
+        Ok(())
+    }
 }

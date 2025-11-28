@@ -1,4 +1,3 @@
-
 mod certificates;
 mod config;
 mod errors;
@@ -87,7 +86,7 @@ fn main() -> Result<()> {
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
 
-    let certwatcher = CertWatcher::new(certstore.clone(), context.clone());
+    let mut certwatcher = CertWatcher::new(certstore.clone(), context.clone());
 
 
     ///// Runtime start
@@ -97,10 +96,12 @@ fn main() -> Result<()> {
             info!("Starting Certificate Management runtime");
             let cert_runtime = tokio::runtime::Builder::new_current_thread()
                 .build()?;
-            cert_runtime.block_on(async move {
-                let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
-                watcher_handle.await
-            })??;
+            cert_runtime.block_on(
+                async move {
+                    let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
+                    watcher_handle.await
+                }
+            )??;
 
             Ok(())
         })

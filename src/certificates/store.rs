@@ -7,8 +7,9 @@ use tracing::info;
 use tracing_log::log::warn;
 
 use crate::{
-    certificates::{CertificateProvider, HostCertificate},
-    errors::ProxenyError, Context,
+    Context,
+    certificates::HostCertificate,
+    errors::ProxenyError,
 };
 
 
@@ -135,6 +136,7 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use std::fs;
+    use crate::CertificateProvider;
     use crate::certificates::tests::*;
 
     #[test]
