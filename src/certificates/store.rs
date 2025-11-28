@@ -7,7 +7,7 @@ use tracing::info;
 use tracing_log::log::warn;
 
 use crate::{
-    Context,
+    RunContext,
     certificates::HostCertificate,
     errors::ProxenyError,
 };
@@ -19,7 +19,7 @@ use crate::{
 // in the config at the moment. This may change, so this is left in
 // place for now.
 pub struct CertStore {
-    context: Arc<Context>,
+    context: Arc<RunContext>,
     certs: Vec<Arc<HostCertificate>>,
     by_host: papaya::HashMap<String, Arc<HostCertificate>>,
     by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
@@ -27,7 +27,7 @@ pub struct CertStore {
 
 impl CertStore {
 
-    pub fn new(certs: Vec<Arc<HostCertificate>>, context: Arc<Context>) -> Result<Self> {
+    pub fn new(certs: Vec<Arc<HostCertificate>>, context: Arc<RunContext>) -> Result<Self> {
         info!("Loading host certificates");
 
         let by_host = certs.iter()
@@ -73,7 +73,7 @@ impl CertStore {
                     .clone();
                 Ok(cert)
             })
-            // 2-pass as .unique() can't handle Results
+            // 2-pass as .unique() doesn't work with Results
             .collect::<Result<Vec<Arc<HostCertificate>>>>()?
             .iter()
             .unique()
@@ -136,6 +136,7 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use std::fs;
+    use crate::config::Config;
     use crate::CertificateProvider;
     use crate::certificates::tests::*;
 
@@ -146,7 +147,7 @@ mod tests {
             "tests/data/certs/snakeoil.crt",
             false
         );
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
         let store = CertStore::new(provider.read_certs(), context).unwrap();
 
         assert_eq!(store.certs.len(), 1);
@@ -162,7 +163,7 @@ mod tests {
             "tests/data/certs/snakeoil.crt",
             false
         );
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
         let store = CertStore::new(provider.read_certs(), context).unwrap();
         let found = store.by_host(&provider.cert.host).unwrap();
 
@@ -176,7 +177,7 @@ mod tests {
             "tests/data/certs/snakeoil.crt",
             false
         );
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
         let store = CertStore::new(provider.read_certs(), context).unwrap();
         let found = store.by_file(&"tests/data/certs/snakeoil.key".into()).unwrap();
 
@@ -196,7 +197,7 @@ mod tests {
             false
         )?);
 
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
         let certs = vec![hc1, hc2];
         let store = CertStore::new(certs, context).unwrap();
         let watchlist = store.watchlist();
@@ -220,7 +221,7 @@ mod tests {
             cert_path.to_str().unwrap(),
             true
         );
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
         let store = CertStore::new(provider.read_certs(), context)?;
         let original_host = provider.cert.host.clone();
 
@@ -267,7 +268,7 @@ mod tests {
             cert_path.to_str().unwrap(),
             true
         );
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
         let store = CertStore::new(provider.read_certs(), context)?;
         let original_host = provider.cert.host.clone();
 

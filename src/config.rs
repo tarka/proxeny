@@ -150,6 +150,22 @@ impl Config {
         Ok(config)
     }
 
+    pub fn empty() -> Self {
+        Self {
+            hostname: String::new(),
+            listen: String::new(),
+            insecure: None,
+            tls: TlsConfig {
+                port: 0,
+                config: TlsConfigType::Files(TlsFilesConfig {
+                    keyfile: Utf8PathBuf::new(),
+                    certfile: Utf8PathBuf::new(),
+                    reload: false,
+                }),
+            },
+            backends: Vec::new(),
+        }
+    }
 }
 
 

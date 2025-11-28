@@ -8,20 +8,20 @@ use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEve
 use tokio::sync::mpsc;
 use tracing_log::log::{info, warn};
 
-use crate::{certificates::store::CertStore, Context};
+use crate::{certificates::store::CertStore, RunContext};
 
 
 const RELOAD_GRACE: Duration = Duration::from_millis(1500);
 
 pub struct CertWatcher {
-    context: Arc<Context>,
+    context: Arc<RunContext>,
     certstore: Arc<CertStore>,
     ev_tx: mpsc::Sender<DebounceEventResult>,
     ev_rx: mpsc::Receiver<DebounceEventResult>,
 }
 
 impl CertWatcher {
-    pub fn new(certstore: Arc<CertStore>, context: Arc<Context>) -> Self {
+    pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
         let (ev_tx, ev_rx) = mpsc::channel(16);
         Self {
             context,
@@ -98,6 +98,7 @@ mod tests {
     use tempfile::tempdir;
     use crate::certificates::CertificateProvider;
     use crate::certificates::tests::*;
+    use crate::config::Config;
 
     #[tokio::test]
     async fn test_cert_watcher_file_updates() -> Result<()> {
@@ -105,7 +106,7 @@ mod tests {
         let key_path = temp_dir.path().join("test.key");
         let cert_path = temp_dir.path().join("test.crt");
 
-        let context = Arc::new(Context::new());
+        let context = Arc::new(RunContext::new(Config::empty()));
 
         fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
         fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;

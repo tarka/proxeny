@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
 use http::Uri;
-use tracing::debug;
+use tracing_log::log::debug;
 
 use crate::{
     certificates::{CertificateProvider, HostCertificate},
-    config::{Config, TlsConfigType},
+    config::{TlsConfigType},
+    RunContext,
 };
 
 fn uri_host(uri: &String) -> Result<String> {
@@ -18,14 +19,15 @@ fn uri_host(uri: &String) -> Result<String> {
 
 
 /// Externally managed certificates
+// TODO: Need a better name
 pub struct ExternalProvider {
-    config: Arc<Config>,
+    context: Arc<RunContext>,
     certs: Vec<Arc<HostCertificate>>,
 }
 
 impl ExternalProvider {
-    pub fn new(config: Arc<Config>) -> Result<Self> {
-        let certs = config.servers().iter()
+    pub fn new(context: Arc<RunContext>) -> Result<Self> {
+        let certs = context.config.servers().iter()
             .filter_map(|s| match &s.tls.config {
                 TlsConfigType::Files(tfc) => {
                     // Wrapper closure for `?` clarity
@@ -50,7 +52,7 @@ impl ExternalProvider {
             .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
 
         Ok(Self {
-            config,
+            context,
             certs,
         })
     }

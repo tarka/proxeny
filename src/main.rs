@@ -34,7 +34,9 @@ fn init_logging(level: u8) -> Result<()> {
 }
 
 // TODO: Should be in certificates/mod.rs?
-pub struct Context {
+pub struct RunContext {
+    pub config: Config,
+
     pub quit_tx: watch::Sender<bool>,
     pub quit_rx: watch::Receiver<bool>,
 
@@ -42,11 +44,12 @@ pub struct Context {
     pub cert_rx: mpsc::Receiver<Arc<HostCertificate>>,
 }
 
-impl Context {
-    pub fn new() -> Self {
+impl RunContext {
+    pub fn new(config: Config) -> Self {
         let (quit_tx, quit_rx) = watch::channel(false);
         let (cert_tx, cert_rx) = mpsc::channel(8);
         Self {
+            config,
             quit_tx, quit_rx,
             cert_tx, cert_rx,
         }
@@ -72,12 +75,12 @@ fn main() -> Result<()> {
 
     let config_file = cli.config
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
-    let config = Arc::new(Config::from_file(&config_file)?);
+    let config = Config::from_file(&config_file)?;
 
-    let context = Arc::new(Context::new());
+    let context = Arc::new(RunContext::new(config));
 
     let providers = vec![
-        ExternalProvider::new(config.clone())?,
+        ExternalProvider::new(context.clone())?,
     ];
     let certs = providers.iter()
         .map(|cp| cp.read_certs())
@@ -108,7 +111,7 @@ fn main() -> Result<()> {
     };
 
     info!("Starting Proxeny");
-    proxy::run_indefinitely(certstore, config)?;
+    proxy::run_indefinitely(certstore, context.clone())?;
 
     context.quit()?;
     cert_handle.join()

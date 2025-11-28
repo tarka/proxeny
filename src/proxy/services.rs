@@ -13,7 +13,7 @@ use pingora_core::{
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info};
 
-use crate::{certificates::store::CertStore, config::Config, proxy::router::Router};
+use crate::{RunContext, certificates::store::CertStore, proxy::router::Router};
 
 pub struct TlsRedirector {
     port: String,
@@ -80,19 +80,19 @@ impl ServeHttp for TlsRedirector {
 
 
 pub struct Proxeny {
-    config: Arc<Config>,
+    context: Arc<RunContext>,
     certstore: Arc<CertStore>,
     routes_by_host: papaya::HashMap<String, Router>,
 }
 
 impl Proxeny {
-    pub fn new(certstore: Arc<CertStore>, config: Arc<Config>) -> Self {
-        let routes_by_host: papaya::HashMap<String, Router> = config.servers().iter()
+    pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
+        let routes_by_host: papaya::HashMap<String, Router> = context.config.servers().iter()
             .map(|s| (s.hostname.clone(),
                       Router::new(&s.backends)))
             .collect();
         Self {
-            config,
+            context,
             certstore,
             routes_by_host,
         }
