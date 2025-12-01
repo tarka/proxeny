@@ -13,7 +13,10 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{external::ExternalProvider, store::CertStore, watcher::CertWatcher, CertificateProvider, HostCertificate},
+    certificates::{
+        CertificateProvider, HostCertificate, external::ExternalProvider, store::CertStore,
+        watcher::CertWatcher,
+    },
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 

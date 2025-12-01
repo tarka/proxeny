@@ -1,5 +1,4 @@
-
-use crate::{certificates::{store::CertStore, watcher::{CertWatcher, RELOAD_GRACE}}, RunContext};
+use crate::{certificates::{store::CertStore, watcher::{CertWatcher, RELOAD_GRACE}}, config::Config, RunContext};
 
 use super::*;
 use std::{io::Write, time::Duration};
@@ -167,6 +166,155 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     // Stop the watcher
     context.quit()?;
     watcher_handle.await??;
+
+    Ok(())
+}
+
+
+#[test]
+fn test_cert_store_new() {
+    let provider = TestProvider::new(
+        "tests/data/certs/snakeoil.key",
+        "tests/data/certs/snakeoil.crt",
+        false
+    );
+    let context = Arc::new(RunContext::new(Config::empty()));
+    let store = CertStore::new(provider.read_certs(), context).unwrap();
+
+    assert!(store.by_host(&provider.cert.host).is_some());
+    assert!(store.by_file(&"tests/data/certs/snakeoil.key".into()).is_some());
+    assert!(store.by_file(&"tests/data/certs/snakeoil.crt".into()).is_some());
+}
+
+#[test]
+fn test_by_host() {
+    let provider = TestProvider::new(
+        "tests/data/certs/snakeoil.key",
+        "tests/data/certs/snakeoil.crt",
+        false
+    );
+    let context = Arc::new(RunContext::new(Config::empty()));
+    let store = CertStore::new(provider.read_certs(), context).unwrap();
+    let found = store.by_host(&provider.cert.host).unwrap();
+
+    assert_eq!(found.host, provider.cert.host);
+}
+
+#[test]
+fn test_by_file() {
+    let provider = TestProvider::new(
+        "tests/data/certs/snakeoil.key",
+        "tests/data/certs/snakeoil.crt",
+        false
+    );
+    let context = Arc::new(RunContext::new(Config::empty()));
+    let store = CertStore::new(provider.read_certs(), context).unwrap();
+    let found = store.by_file(&"tests/data/certs/snakeoil.key".into()).unwrap();
+
+    assert_eq!(found.host, provider.cert.host);
+}
+
+#[test]
+fn test_watchlist() -> Result<()> {
+    let hc1 = Arc::new(HostCertificate::new(
+        "tests/data/certs/snakeoil.key".into(),
+        "tests/data/certs/snakeoil.crt".into(),
+        true
+    )?);
+    let hc2 = Arc::new(HostCertificate::new(
+        "tests/data/certs/snakeoil-2.key".into(),
+        "tests/data/certs/snakeoil-2.pem".into(),
+        false
+    )?);
+
+    let context = Arc::new(RunContext::new(Config::empty()));
+    let certs = vec![hc1, hc2];
+    let store = CertStore::new(certs, context).unwrap();
+    let watchlist = store.watchlist();
+
+    assert_eq!(watchlist.len(), 2);
+    assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.key")));
+    assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.crt")));
+    Ok(())
+}
+
+#[test]
+fn test_file_update_success() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let key_path = temp_dir.path().join("test.key");
+    let cert_path = temp_dir.path().join("test.crt");
+    fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
+    fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+
+    let provider = TestProvider::new(
+        key_path.to_str().unwrap(),
+        cert_path.to_str().unwrap(),
+        true
+    );
+    let context = Arc::new(RunContext::new(Config::empty()));
+    let store = CertStore::new(provider.read_certs(), context)?;
+    let original_host = provider.cert.host.clone();
+
+    // The original cert is snakeoil
+    let first_cert = store.by_host(&original_host).unwrap();
+    assert!(first_cert.certs[0].subject_name().print_ex(0).unwrap().contains("proxeny.example.com"));
+
+    // Now update the files to snakeoil-2
+    fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
+    fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+
+    let updated_files = vec![key_path.clone().try_into()?, cert_path.clone().try_into()?];
+    store.file_update(updated_files)?;
+
+    let updated_cert_from_file = test_cert(
+        key_path.to_str().unwrap(),
+        cert_path.to_str().unwrap(),
+        true
+    );
+    let new_host = updated_cert_from_file.host;
+
+    // The store should have updated the certificate.
+    let updated_cert_from_store = store.by_host(&new_host).expect("Cert not found for new host");
+    assert_eq!(updated_cert_from_store.host, new_host);
+
+    // The old entry should not exist anymore if the host has changed.
+    if original_host != new_host {
+        assert!(store.by_host(&original_host).is_none(), "Old host entry should be removed");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_file_update_mismatch() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let key_path = temp_dir.path().join("test.key");
+    let cert_path = temp_dir.path().join("test.crt");
+    fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
+    fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+
+    let provider = TestProvider::new(
+        key_path.to_str().unwrap(),
+        cert_path.to_str().unwrap(),
+        true
+    );
+    let context = Arc::new(RunContext::new(Config::empty()));
+    let store = CertStore::new(provider.read_certs(), context)?;
+    let original_host = provider.cert.host.clone();
+
+    let first_cert = store.by_host(&original_host).unwrap();
+
+    // Update only the key, causing a mismatch
+    fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
+
+    let updated_files = vec![key_path.try_into()?, cert_path.try_into()?];
+    // This should not return an error, but log a warning and not update.
+    store.file_update(updated_files)?;
+
+    let cert_after_update = store.by_host(&original_host).unwrap();
+
+    // The certificate should not have changed
+    assert_eq!(Arc::as_ptr(&first_cert), Arc::as_ptr(&cert_after_update));
 
     Ok(())
 }
