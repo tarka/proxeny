@@ -8,13 +8,13 @@ use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
     certificates::{
-        CertificateProvider, HostCertificate, external::ExternalProvider, store::CertStore,
+        CertificateProvider, external::ExternalProvider, store::CertStore,
     },
     config::{Config, DEFAULT_CONFIG_FILE},
 };
@@ -35,32 +35,21 @@ fn init_logging(level: u8) -> Result<()> {
     Ok(())
 }
 
-// TODO: Should be in certificates/mod.rs?
 pub struct RunContext {
     pub config: Config,
 
     pub quit_tx: watch::Sender<bool>,
     pub quit_rx: watch::Receiver<bool>,
-
-    pub cert_tx: mpsc::Sender<Arc<HostCertificate>>,
-    pub cert_rx: mpsc::Receiver<Arc<HostCertificate>>,
 }
 
 impl RunContext {
     pub fn new(config: Config) -> Self {
         let (quit_tx, quit_rx) = watch::channel(false);
-        let (cert_tx, cert_rx) = mpsc::channel(8);
         Self {
             config,
             quit_tx, quit_rx,
-            cert_tx, cert_rx,
         }
     }
-
-    // pub fn send_cert(&self, cert: Arc<HostCertificate>) -> Result<()> {
-    //     self.cert_tx.send(cert)?;
-    //     Ok(())
-    // }
 
     pub fn quit(&self) -> Result<()> {
         info!("Sending quit signal to runtimes");
