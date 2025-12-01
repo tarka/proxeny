@@ -126,7 +126,9 @@ impl CertWatcher {
             })
             .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
 
-        self.certstore.cert_updates(certs)?;
+        for cert in certs {
+            self.certstore.update(cert)?;
+        }
 
         Ok(())
     }

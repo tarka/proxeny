@@ -262,10 +262,9 @@ fn test_file_update_success() -> Result<()> {
     // Now update the files to snakeoil-2
     fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
     fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
-    let cert = Arc::new(HostCertificate::from(&first_cert)?);
+    let newcert = Arc::new(HostCertificate::from(&first_cert)?);
 
-    let updated_certs = vec![cert];
-    store.cert_updates(updated_certs)?;
+    store.update(newcert)?;
 
     let updated_cert_from_file = test_cert(
         key_path.to_str().unwrap(),
