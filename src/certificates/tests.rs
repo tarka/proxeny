@@ -1,7 +1,9 @@
 
+use crate::{certificates::{store::CertStore, watcher::{CertWatcher, RELOAD_GRACE}}, RunContext};
+
 use super::*;
-use std::io::Write;
-use tempfile::NamedTempFile;
+use std::{io::Write, time::Duration};
+use tempfile::{tempdir, NamedTempFile};
 
 // Common test utils
 pub fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
@@ -111,6 +113,60 @@ fn test_load_certs_empty_cert_file() -> Result<()> {
     let result = load_certs(&key_path, &empty_cert_path);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("No certificates found in TLS .crt file"));
+
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn test_cert_watcher_file_updates() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let key_path = temp_dir.path().join("test.key");
+    let cert_path = temp_dir.path().join("test.crt");
+
+    let context = Arc::new(RunContext::new(crate::config::Config::empty()));
+
+    fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
+    fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+
+    let provider = TestProvider::new(
+        key_path.to_str().unwrap(),
+        cert_path.to_str().unwrap(),
+        true,
+    );
+    let store = Arc::new(CertStore::new(provider.read_certs(), context.clone())?);
+    let original_host = provider.cert.host.clone();
+
+    let original_cert = store.by_host(&original_host).unwrap();
+    let original_expiry = original_cert.certs[0].not_after().to_string();
+
+    let mut watcher = CertWatcher::new(store.clone(), context.clone());
+
+    // Start the watcher in a separate task
+    let watcher_handle = tokio::spawn(async move {
+        watcher.watch().await
+    });
+
+    // Wait for the watcher to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Update the files
+    info!("Updating cert files");
+    fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
+    fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+
+    // Wait for the watcher to process the event
+    tokio::time::sleep(RELOAD_GRACE + Duration::from_millis(500)).await;
+
+    info!("Checking updated certs");
+    let updated_cert = store.by_host(&original_host).unwrap();
+    let updated_expiry = updated_cert.certs[0].not_after().to_string();
+
+    assert_ne!(original_expiry, updated_expiry);
+
+    // Stop the watcher
+    context.quit()?;
+    watcher_handle.await??;
 
     Ok(())
 }

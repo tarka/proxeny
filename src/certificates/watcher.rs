@@ -11,7 +11,7 @@ use tracing_log::log::{info, warn};
 use crate::{certificates::store::CertStore, RunContext};
 
 
-const RELOAD_GRACE: Duration = Duration::from_millis(1500);
+pub const RELOAD_GRACE: Duration = Duration::from_millis(1500);
 
 pub struct CertWatcher {
     context: Arc<RunContext>,
@@ -89,67 +89,4 @@ impl CertWatcher {
         Ok(())
     }
 
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::tempdir;
-    use crate::certificates::CertificateProvider;
-    use crate::certificates::tests::*;
-    use crate::config::Config;
-
-    #[tokio::test]
-    async fn test_cert_watcher_file_updates() -> Result<()> {
-        let temp_dir = tempdir()?;
-        let key_path = temp_dir.path().join("test.key");
-        let cert_path = temp_dir.path().join("test.crt");
-
-        let context = Arc::new(RunContext::new(Config::empty()));
-
-        fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
-        fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
-
-        let provider = TestProvider::new(
-            key_path.to_str().unwrap(),
-            cert_path.to_str().unwrap(),
-            true,
-        );
-        let store = Arc::new(CertStore::new(provider.read_certs(), context.clone())?);
-        let original_host = provider.cert.host.clone();
-
-        let original_cert = store.by_host(&original_host).unwrap();
-        let original_expiry = original_cert.certs[0].not_after().to_string();
-
-        let mut watcher = CertWatcher::new(store.clone(), context.clone());
-
-        // Start the watcher in a separate task
-        let watcher_handle = tokio::spawn(async move {
-            watcher.watch().await
-        });
-
-        // Wait for the watcher to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Update the files
-        info!("Updating cert files");
-        fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
-        fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
-
-        // Wait for the watcher to process the event
-        tokio::time::sleep(RELOAD_GRACE + Duration::from_millis(500)).await;
-
-        info!("Checking updated certs");
-        let updated_cert = store.by_host(&original_host).unwrap();
-        let updated_expiry = updated_cert.certs[0].not_after().to_string();
-
-        assert_ne!(original_expiry, updated_expiry);
-
-        // Stop the watcher
-        context.quit()?;
-        watcher_handle.await??;
-
-        Ok(())
-    }
 }
