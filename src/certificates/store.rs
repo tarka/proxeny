@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use camino::Utf8PathBuf;
 use tracing::info;
+use tracing_log::log::warn;
 
 use crate::{
     RunContext,
@@ -61,21 +62,24 @@ impl CertStore {
             .cloned()
     }
 
+
     pub fn cert_updates(&self, certs: Vec<Arc<HostCertificate>>) -> Result<()> {
 
         for newcert in certs {
             let host = newcert.host.clone();
             info!("Updating certificate for {host}");
 
-            self.by_host.pin().update(host, |_old| newcert.clone());
+            self.by_host.pin().update(host, |_old| newcert.clone())
+                .ok_or(anyhow!("Matching host for {} not found in cert store", newcert.host))?;
 
             let keyfile = newcert.keyfile.clone();
             let certfile = newcert.certfile.clone();
 
             let by_file = self.by_file.pin();
-            by_file.update(keyfile, |_old| newcert.clone());
-            by_file.update(certfile, |_old| newcert.clone());
-        }
+            by_file.update(keyfile, |_old| newcert.clone())
+                .ok_or(anyhow!("File {} not found in cert store", newcert.keyfile))?;
+            by_file.update(certfile, |_old| newcert.clone())
+                .ok_or(anyhow!("File {} not found in cert store", newcert.certfile))?;        }
         Ok(())
     }
 
