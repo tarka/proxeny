@@ -18,7 +18,7 @@ use pingora_boringssl::{
 };
 use tracing_log::log::info;
 
-use crate::errors::ProxenyError;
+use crate::{certificates::{store::CertStore, watcher::CertWatcher}, errors::ProxenyError, RunContext};
 
 #[derive(Debug)]
 pub struct HostCertificate {
@@ -116,3 +116,10 @@ pub trait CertificateProvider {
     fn read_certs(&self) -> Vec<Arc<HostCertificate>>;
 }
 
+pub async fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<()> {
+    let mut certwatcher = CertWatcher::new(certstore.clone(), context.clone());
+    let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
+    watcher_handle.await??;
+
+    Ok(())
+}

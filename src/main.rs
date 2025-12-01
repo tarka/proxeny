@@ -89,22 +89,20 @@ fn main() -> Result<()> {
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
 
-    let mut certwatcher = CertWatcher::new(certstore.clone(), context.clone());
-
 
     ///// Runtime start
 
     let cert_handle = {
+        let certstore = certstore.clone();
+        let context = context.clone();
         thread::spawn(move || -> Result<()> {
             info!("Starting Certificate Management runtime");
             let cert_runtime = tokio::runtime::Builder::new_current_thread()
                 .build()?;
+
             cert_runtime.block_on(
-                async move {
-                    let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
-                    watcher_handle.await
-                }
-            )??;
+                certificates::run_indefinitely(certstore, context)
+            )?;
 
             Ok(())
         })
