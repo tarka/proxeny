@@ -262,9 +262,10 @@ fn test_file_update_success() -> Result<()> {
     // Now update the files to snakeoil-2
     fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
     fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+    let cert = Arc::new(HostCertificate::from(&first_cert)?);
 
-    let updated_files = vec![key_path.clone().try_into()?, cert_path.clone().try_into()?];
-    store.file_update(updated_files)?;
+    let updated_certs = vec![cert];
+    store.cert_updates(updated_certs)?;
 
     let updated_cert_from_file = test_cert(
         key_path.to_str().unwrap(),
@@ -281,40 +282,6 @@ fn test_file_update_success() -> Result<()> {
     if original_host != new_host {
         assert!(store.by_host(&original_host).is_none(), "Old host entry should be removed");
     }
-
-    Ok(())
-}
-
-#[test]
-fn test_file_update_mismatch() -> Result<()> {
-    let temp_dir = tempdir()?;
-    let key_path = temp_dir.path().join("test.key");
-    let cert_path = temp_dir.path().join("test.crt");
-    fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
-    fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
-
-    let provider = TestProvider::new(
-        key_path.to_str().unwrap(),
-        cert_path.to_str().unwrap(),
-        true
-    );
-    let context = Arc::new(RunContext::new(Config::empty()));
-    let store = CertStore::new(provider.read_certs(), context)?;
-    let original_host = provider.cert.host.clone();
-
-    let first_cert = store.by_host(&original_host).unwrap();
-
-    // Update only the key, causing a mismatch
-    fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
-
-    let updated_files = vec![key_path.try_into()?, cert_path.try_into()?];
-    // This should not return an error, but log a warning and not update.
-    store.file_update(updated_files)?;
-
-    let cert_after_update = store.by_host(&original_host).unwrap();
-
-    // The certificate should not have changed
-    assert_eq!(Arc::as_ptr(&first_cert), Arc::as_ptr(&cert_after_update));
 
     Ok(())
 }

@@ -1,17 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use camino::Utf8PathBuf;
-use itertools::Itertools;
 use tracing::info;
-use tracing_log::log::warn;
 
 use crate::{
     RunContext,
     certificates::HostCertificate,
-    errors::ProxenyError,
 };
-
 
 
 // TODO: We currently use papaya to store lookup tables for multiple
@@ -65,42 +61,7 @@ impl CertStore {
             .cloned()
     }
 
-    pub fn file_update(&self, files: Vec<Utf8PathBuf>) -> Result<()> {
-        let certs = files.iter()
-            .map(|path| {
-                let cert = self.by_file(path)
-                 .ok_or(anyhow!("Path not found in store: {path}"))?
-                    .clone();
-                Ok(cert)
-            })
-            // 2-pass as .unique() doesn't work with Results
-            .collect::<Result<Vec<Arc<HostCertificate>>>>()?
-            .iter()
-            .unique()
-            .filter_map(|existing| {
-                // Attempt to reload the relevant
-                // HostCertificate. However as this can be expected
-                // while the certs are being replaced externally we
-                // just warn and pass for now.
-                match HostCertificate::from(existing) {
-                    Ok(hc) => Some(Ok(Arc::new(hc))),
-                    Err(err) => {
-                        if err.is::<ProxenyError>() {
-                            let perr = err.downcast::<ProxenyError>()
-                                .expect("Error downcasting ProxenyError after check; this shouldn't happen");
-                            if matches!(perr, ProxenyError::CertificateMismatch(_, _)) {
-                                warn!("Possible error on reload: {perr}. This may be transient.");
-                                None
-                            } else {
-                                Some(Err(perr.into()))
-                            }
-                        } else {
-                            Some(Err(err))
-                        }
-                    },
-                }
-            })
-            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
+    pub fn cert_updates(&self, certs: Vec<Arc<HostCertificate>>) -> Result<()> {
 
         for newcert in certs {
             let host = newcert.host.clone();

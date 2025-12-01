@@ -8,7 +8,7 @@ use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEve
 use tokio::sync::mpsc;
 use tracing_log::log::{info, warn};
 
-use crate::{certificates::store::CertStore, RunContext};
+use crate::{certificates::{store::CertStore, HostCertificate}, errors::ProxenyError, RunContext};
 
 
 pub const RELOAD_GRACE: Duration = Duration::from_millis(1500);
@@ -69,7 +69,7 @@ impl CertWatcher {
 
     fn process_events(&self, events: Vec<DebouncedEvent>) -> Result<()> {
         info!("Processing {} files update events", events.len());
-        let certs = events.into_iter()
+        let paths = events.into_iter()
             .filter(|dev| matches!(dev.event.kind,
                                    EventKind::Create(_)
                                    | EventKind::Modify(_)
@@ -84,9 +84,50 @@ impl CertWatcher {
             })
             .collect::<Result<Vec<Utf8PathBuf>>>()?;
 
-        self.certstore.file_update(certs)?;
+        self.process_paths(paths)?;
 
         Ok(())
     }
 
+    fn process_paths(&self, paths: Vec<Utf8PathBuf>) -> Result<()> {
+        let certs = paths.iter()
+            .map(|path| {
+                let cert = self.certstore.by_file(path)
+                 .ok_or(anyhow!("Path not found in store: {path}"))?
+                    .clone();
+                Ok(cert)
+            })
+            // 2-pass as .unique() doesn't work with Results
+            .collect::<Result<Vec<Arc<HostCertificate>>>>()?
+            .iter()
+            .unique()
+            .filter_map(|existing| {
+                // Attempt to reload the relevant
+                // HostCertificate. However as this can be expected
+                // while the certs are being replaced externally we
+                // just warn and pass for now.
+                match HostCertificate::from(existing) {
+                    Ok(hc) => Some(Ok(Arc::new(hc))),
+                    Err(err) => {
+                        if err.is::<ProxenyError>() {
+                            let perr = err.downcast::<ProxenyError>()
+                                .expect("Error downcasting ProxenyError after check; this shouldn't happen");
+                            if matches!(perr, ProxenyError::CertificateMismatch(_, _)) {
+                                warn!("Possible error on reload: {perr}. This may be transient.");
+                                None
+                            } else {
+                                Some(Err(perr.into()))
+                            }
+                        } else {
+                            Some(Err(err))
+                        }
+                    },
+                }
+            })
+            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
+
+        self.certstore.cert_updates(certs)?;
+
+        Ok(())
+    }
 }

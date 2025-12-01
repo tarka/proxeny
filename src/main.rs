@@ -15,7 +15,6 @@ use tracing_log::log::info;
 use crate::{
     certificates::{
         CertificateProvider, HostCertificate, external::ExternalProvider, store::CertStore,
-        watcher::CertWatcher,
     },
     config::{Config, DEFAULT_CONFIG_FILE},
 };
