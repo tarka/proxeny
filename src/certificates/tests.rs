@@ -284,3 +284,28 @@ fn test_file_update_success() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn sanity_check_pending_filter() {
+    // Simplified test of acme->pending() logic
+    struct Cert {
+        exp: Option<bool>,
+        name: &'static str,
+    }
+    let hosts = vec![
+        Cert{exp: Some(false), name: "ok" },
+        Cert{exp: None, name: "new" },
+        Cert{exp: Some(false), name: "ok" },
+        Cert{exp: Some(true), name: "expiring" },
+    ];
+
+    let pending = hosts.iter()
+    // Either None or expiring with 30 days
+        .filter(|cert| ! cert.exp
+                .is_some_and(|v| ! v))
+        .collect::<Vec<&Cert>>();
+
+    assert_eq!(2, pending.len());
+    assert_eq!("new", pending[0].name);
+    assert_eq!("expiring", pending[1].name);
+}
