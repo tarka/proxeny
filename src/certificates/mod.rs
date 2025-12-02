@@ -10,6 +10,7 @@ mod tests;
 use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 
 use anyhow::{bail, Result};
+use boring::asn1::Asn1Time;
 use camino::{Utf8Path, Utf8PathBuf};
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
@@ -59,6 +60,13 @@ impl HostCertificate {
         HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
     }
 
+    pub fn expiring(&self) -> bool {
+        let exp = self.certs[0].not_after();
+        // days_from_now(30) is an FFI call; if it fails something went horribly wrong.
+        let comp = Asn1Time::days_from_now(30)
+            .expect("Failed to create certificate comparison date; this shouldn't happen");
+        exp <= comp
+    }
 }
 
 impl PartialEq<HostCertificate> for HostCertificate {

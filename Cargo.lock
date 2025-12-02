@@ -2298,6 +2298,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "boring",
  "camino",
  "clap 4.5.53",
  "ctor",
