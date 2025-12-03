@@ -11,7 +11,7 @@ use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 use anyhow::{anyhow, bail, Result};
 use boring::asn1::{Asn1Time, Asn1TimeRef};
 use camino::{Utf8Path, Utf8PathBuf};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
@@ -29,6 +29,7 @@ pub struct HostCertificate {
     key: PKey<Private>,
     certfile: Utf8PathBuf,
     certs: Vec<X509>,
+    expires: DateTime<Utc>,
     watch: bool,
 }
 
@@ -45,12 +46,16 @@ impl HostCertificate {
                          .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
         info!("Certificate found: {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
 
+        let not_after = certs[0].not_after();
+        let expires = asn1time_to_datetime(not_after)?;
+
         Ok(HostCertificate {
             host,
             keyfile,
             key,
             certfile,
             certs,
+            expires,
             watch,
         })
     }
@@ -62,18 +67,13 @@ impl HostCertificate {
     }
 
 
-    pub fn expires(&self) -> Result<DateTime<Utc>> {
-        let not_after = self.certs[0].not_after();
-        asn1time_to_datetime(not_after)
+    pub fn expires(&self) -> &DateTime<Utc> {
+        &self.expires
     }
 
-    pub fn is_expiring(&self) -> bool {
-        let exp = self.certs[0].not_after();
-        // days_from_now(30) is an FFI call; if it fails with valid
-        // input something went horribly wrong.
-        let comp = Asn1Time::days_from_now(30)
-            .expect("Failed to create certificate comparison date; this shouldn't happen");
-        exp <= comp
+    pub fn is_expiring_in(&self, days: i64) -> bool {
+        let in_days = Utc::now() + Duration::days(days);
+        in_days >= self.expires
     }
 }
 

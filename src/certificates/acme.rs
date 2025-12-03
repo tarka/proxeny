@@ -7,6 +7,7 @@ use tracing_log::log::{info, warn};
 use crate::{certificates::{store::CertStore, CertificateProvider, HostCertificate}, config::TlsConfigType, RunContext};
 
 const CERT_BASE_DEFAULT: &str = "/var/lib/proxeny/acme";
+const EXPIRY_WINDOW: i64 = 30;
 
 struct AcmeHost {
     host: String,
@@ -24,8 +25,6 @@ pub struct AcmeProvider {
     certstore: Arc<CertStore>,
     hosts: Vec<AcmeHost>,
 }
-
-
 
 impl AcmeProvider {
 
@@ -115,7 +114,7 @@ impl AcmeProvider {
         self.hosts.iter()
             // Either None or expiring with 30 days
             .filter(|ah| ! ah.cert.as_ref()
-                    .is_some_and(|cert| ! cert.is_expiring()))
+                    .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW)))
             .collect()
     }
 
