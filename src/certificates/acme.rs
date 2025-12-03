@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use tracing_log::log::{info, warn};
 
 use crate::{certificates::{store::CertStore, CertificateProvider, HostCertificate}, config::TlsConfigType, RunContext};
 
@@ -81,22 +82,41 @@ impl AcmeProvider {
             })
             .collect::<Vec<Arc<HostCertificate>>>();
 
+        // Initial load
         for cert in existing.into_iter() {
             self.certstore.upsert(cert)?;
+        }
+
+        let mut quit_rx = self.context.quit_rx.clone();
+        loop {
+            tokio::select! {
+                // events = self.ev_rx.recv() => {
+                //     match events {
+                //         Some(Err(errs)) => warn!("Received errors from cert watcher: {errs:#?}"),
+                //         Some(Ok(evs)) => self.process_events(evs)?,
+                //         None => {
+                //             warn!("Notify watcher channel closed; quitting");
+                //             break;
+                //         }
+                //     }
+                // },
+                _ = quit_rx.changed() => {
+                    info!("Quitting certificate watcher loop.");
+                    break;
+                },
+            };
         }
 
         Ok(())
     }
 
     /// Returns certs that need creating or refreshing
-    fn pending(&self) -> Result<Vec<&AcmeHost>> {
-        let pending = self.hosts.iter()
+    fn pending(&self) -> Vec<&AcmeHost> {
+        self.hosts.iter()
             // Either None or expiring with 30 days
             .filter(|ah| ! ah.cert.as_ref()
-                    .is_some_and(|cert| ! cert.expiring()))
-            .collect::<Vec<&AcmeHost>>();
-
-        Ok(pending)
+                    .is_some_and(|cert| ! cert.is_expiring()))
+            .collect()
     }
 
 }

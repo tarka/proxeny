@@ -2,6 +2,7 @@ use crate::{certificates::{store::CertStore, watcher::{CertWatcher, RELOAD_GRACE
 
 use super::*;
 use std::{io::Write, time::Duration};
+use chrono::TimeZone;
 use tempfile::{tempdir, NamedTempFile};
 
 // Common test utils
@@ -308,4 +309,40 @@ fn sanity_check_pending_filter() {
     assert_eq!(2, pending.len());
     assert_eq!("new", pending[0].name);
     assert_eq!("expiring", pending[1].name);
+}
+
+
+#[test]
+fn test_asn1time_to_datetime() -> Result<()> {
+    let past = DateTime::parse_from_rfc3339("2023-01-01 00:00:00+00:00")? // Jan 1, 2023
+        .timestamp();
+    let asn1_time = Asn1Time::from_unix(past).expect("Failed to create ASN.1 time");
+    let datetime = asn1time_to_datetime(&asn1_time.as_ref()).expect("Failed to convert ASN.1 time");
+
+    let expected = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).single().expect("Invalid date");
+    assert_eq!(datetime, expected);
+    Ok(())
+}
+
+#[test]
+fn test_asn1time_to_datetime_epoch() {
+    // Test conversion of ASN.1 time at Unix epoch
+    let asn1_time = Asn1Time::from_unix(0).expect("Failed to create ASN.1 time");
+    let datetime = asn1time_to_datetime(&asn1_time.as_ref()).expect("Failed to convert ASN.1 time");
+
+    let expected = Utc.with_ymd_and_hms(1970, 1, 1, 0, 0, 0).single().expect("Invalid date");
+    assert_eq!(datetime, expected);
+}
+
+#[test]
+fn test_asn1time_to_datetime_future() -> Result<()> {
+    let datetime = DateTime::parse_from_rfc3339("2038-01-19 03:14:07+00:00")? // Jan 1, 2023
+        .timestamp();
+    let asn1_time = Asn1Time::from_unix(datetime).expect("Failed to create ASN.1 time"); // Year 2038
+    let datetime = asn1time_to_datetime(&asn1_time.as_ref()).expect("Failed to convert ASN.1 time");
+
+    let expected = Utc.with_ymd_and_hms(2038, 1, 19, 3, 14, 7).single().expect("Invalid date");
+    assert_eq!(datetime, expected);
+
+    Ok(())
 }

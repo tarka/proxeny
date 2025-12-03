@@ -1,17 +1,18 @@
 pub mod acme;
 pub mod external;
 pub mod handler;
+#[cfg(test)]
+mod tests;
 pub mod store;
 pub mod watcher;
 
-#[cfg(test)]
-mod tests;
-
 use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 
-use anyhow::{bail, Result};
-use boring::asn1::Asn1Time;
+use anyhow::{anyhow, bail, Result};
+use boring::asn1::{Asn1Time, Asn1TimeRef};
 use camino::{Utf8Path, Utf8PathBuf};
+use chrono::{DateTime, Utc};
+
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
     pkey::{PKey, Private},
@@ -60,13 +61,35 @@ impl HostCertificate {
         HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
     }
 
-    pub fn expiring(&self) -> bool {
+
+    pub fn expires(&self) -> Result<DateTime<Utc>> {
+        let not_after = self.certs[0].not_after();
+        asn1time_to_datetime(not_after)
+    }
+
+    pub fn is_expiring(&self) -> bool {
         let exp = self.certs[0].not_after();
-        // days_from_now(30) is an FFI call; if it fails something went horribly wrong.
+        // days_from_now(30) is an FFI call; if it fails with valid
+        // input something went horribly wrong.
         let comp = Asn1Time::days_from_now(30)
             .expect("Failed to create certificate comparison date; this shouldn't happen");
         exp <= comp
     }
+}
+
+fn asn1time_to_datetime(not_after: &Asn1TimeRef) -> Result<DateTime<Utc>> {
+    // The diff function appears to return the negative of what's expected
+    // Based on testing, not_after.diff(&epoch) returns a negative value
+    let epoch = Asn1Time::from_unix(0)?;
+    let time_diff = not_after.diff(&epoch)?; // Returns -(expected_value)
+
+    // Calculate total seconds and negate the entire result
+    let total_seconds = -((time_diff.days * 86400) + time_diff.secs);
+
+    let datetime = DateTime::<Utc>::from_timestamp(total_seconds as i64, 0)
+        .ok_or(anyhow!("Failed to create DateTime from timestamp"))?;
+
+    Ok(datetime)
 }
 
 impl PartialEq<HostCertificate> for HostCertificate {
