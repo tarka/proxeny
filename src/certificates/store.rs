@@ -16,7 +16,6 @@ use crate::{
 // place for now.
 pub struct CertStore {
     context: Arc<RunContext>,
-    certs: Vec<Arc<HostCertificate>>,
     by_host: papaya::HashMap<String, Arc<HostCertificate>>,
     by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
 }
@@ -42,7 +41,6 @@ impl CertStore {
 
         let certstore = Self {
             context,
-            certs,
             by_host,
             by_file,
         };
@@ -95,7 +93,8 @@ impl CertStore {
     }
 
     pub fn watchlist(&self) -> Vec<Utf8PathBuf> {
-        self.certs.iter()
+        let by_host = self.by_host.pin();
+        by_host.values()
             .filter_map(|h| if h.watch {
                 Some(vec![h.keyfile.clone(), h.certfile.clone()])
             } else {
