@@ -4,7 +4,7 @@ use anyhow::Result;
 use camino::Utf8PathBuf;
 use tracing_log::log::{info, warn};
 
-use crate::{certificates::{store::CertStore, CertificateProvider, HostCertificate}, config::TlsConfigType, RunContext};
+use crate::{certificates::{store::CertStore, HostCertificate}, config::{AcmeChallenge, AcmeProvider, DnsProvider, TlsConfigType}, RunContext};
 
 const CERT_BASE_DEFAULT: &str = "/var/lib/proxeny/acme";
 const EXPIRY_WINDOW: i64 = 30;
@@ -14,19 +14,17 @@ struct AcmeHost {
     contact: String,
     keyfile: Utf8PathBuf,
     certfile: Utf8PathBuf,
-    // TODO:
-    // acme_provider: AcmeProvider,
-    // challenge_type: AcmeChallenge,
-    cert: Option<Arc<HostCertificate>>,
+    acme_provider: AcmeProvider,
+    challenge_type: AcmeChallenge,
 }
 
-pub struct AcmeProvider {
+pub struct AcmeRuntime {
     context: Arc<RunContext>,
     certstore: Arc<CertStore>,
     hosts: Vec<AcmeHost>,
 }
 
-impl AcmeProvider {
+impl AcmeRuntime {
 
     pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<Self> {
         // FIXME: Should come from config eventually
@@ -48,17 +46,12 @@ impl AcmeProvider {
                 let keyfile = cert_file.with_extension(".key");
                 let certfile = cert_file.with_extension(".crt");
 
-                let cert = if keyfile.exists() && certfile.exists() {
-                    Some(Arc::new(HostCertificate::new(keyfile.clone(), certfile.clone(), false)?))
-                } else {
-                    None
-                };
-
                 let acme_host = AcmeHost {
-                    cert,
                     host,
                     keyfile,
                     certfile,
+                    acme_provider: aconf.acme_provider,
+                    challenge_type: aconf.challenge_type.clone(),
                     contact: aconf.contact.clone(),
                 };
                 Ok(acme_host)
@@ -74,16 +67,18 @@ impl AcmeProvider {
 
     pub async fn run(&mut self) -> Result<()> {
         let existing = self.hosts.iter()
-            .filter_map(|ah| if let Some(cert) = &ah.cert {
-                Some(cert.clone())
-            } else {
-                None
-            })
-            .collect::<Vec<Arc<HostCertificate>>>();
+            .filter(|ah| ah.keyfile.exists() && ah.certfile.exists())
+            .map(|ah| Ok(Arc::new(HostCertificate::new(ah.keyfile.clone(), ah.certfile.clone(), false)?)))
+            .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
 
-        // Initial load
+        // Initial load of existing certs. NOTE: This is slightly hacky
+        // as we're possibly loading expired certs only to immediately
+        // replace them, but it simplifies pending() etc.
         for cert in existing.into_iter() {
             self.certstore.upsert(cert)?;
+        }
+
+        for host in self.pending() {
         }
 
         let mut quit_rx = self.context.quit_rx.clone();
@@ -109,21 +104,36 @@ impl AcmeProvider {
         Ok(())
     }
 
+    async fn renew_cert(&self, host: &AcmeHost) -> Result<()> {
+        match host.challenge_type {
+            AcmeChallenge::Dns01(ref provider) => self.renew_dns01(host, &provider).await,
+            AcmeChallenge::Http01 => self.renew_http01(host).await,
+        }
+    }
+
+    async fn renew_dns01(&self, host: &AcmeHost, provider: &DnsProvider) -> Result<()> {
+        let dns_config = zone_update::Config {
+            domain: provider.domain.clone(),
+            dry_run: false,
+        };
+        let email = format!("mailto:{}", host.contact);
+
+        let dns_impl = provider.dns_provider.async_impl(dns_config);
+
+        Ok(())
+    }
+
+    async fn renew_http01(&self, host: &AcmeHost) -> Result<()> {
+        unimplemented!()
+    }
+
     /// Returns certs that need creating or refreshing
     fn pending(&self) -> Vec<&AcmeHost> {
         self.hosts.iter()
             // Either None or expiring with 30 days
-            .filter(|ah| ! ah.cert.as_ref()
+            .filter(|ah| ! self.certstore.by_host(&ah.host)
                     .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW)))
             .collect()
     }
 
-}
-
-impl CertificateProvider for AcmeProvider {
-    fn read_certs(&self) -> Vec<Arc<HostCertificate>> {
-        self.hosts.iter()
-            .filter_map(|h| h.cert.clone())
-            .collect()
-    }
 }

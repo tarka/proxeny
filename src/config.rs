@@ -46,7 +46,7 @@ where
 }
 
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AcmeProvider {
     LetsEncrypt,
@@ -61,7 +61,8 @@ impl Default for AcmeProvider {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct DnsProvider {
-    dns_provider: zone_update::Providers,
+    pub domain: String,
+    pub dns_provider: zone_update::Providers,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -204,6 +205,7 @@ mod tests {
                 contact: _,
                 acme_provider: AcmeProvider::LetsEncrypt,
                 challenge_type: AcmeChallenge::Dns01(DnsProvider {
+                    domain: _,
                     dns_provider: zone_update::Providers::PorkBun(_)
                 }),
 

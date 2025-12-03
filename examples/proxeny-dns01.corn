@@ -23,6 +23,7 @@ let {
             contact = "admin@example.com"
             challenge_type = {
               type = "dns-01"
+              domain = "example.com"
               dns_provider = {
                 name = "porkbun"
                 key = $env_PORKBUN_KEY
