@@ -38,15 +38,17 @@ struct TestCerts {
 impl TestCerts {
     fn new() -> Result<Self> {
         create_dir_all(CERT_BASE)?;
-        let host = "proxeny.example.com";
-        let name = "snakeoil-1";
 
         let not_before = Utc::now().date_naive();
         let not_after = not_before.clone().checked_add_days(Days::new(365)).unwrap();
 
+        let host = "proxeny.example.com";
+        let name = "snakeoil-1";
+
         let proxeny_ss1 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "snakeoil-2";
+        let not_after = not_before.clone().checked_add_days(Days::new(720)).unwrap();
         let proxeny_ss2 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "www.example.com";
@@ -70,6 +72,7 @@ fn gen_cert(host: &str,
     let base = Utf8PathBuf::try_from(CERT_BASE)?;
     let keyfile = base.join(name).with_extension("key");
     let certfile = base.join(name).with_extension("crt");
+
     if ! (keyfile.exists() && certfile.exists()) {
 
         let subj = "/C=AU/ST=NSW/L=Sydney/O=Example Org./CN=";
@@ -87,6 +90,7 @@ fn gen_cert(host: &str,
     }
 
     let host_certificate = HostCertificate::new(keyfile, certfile, watch)?;
+
     Ok(Arc::new(host_certificate))
 }
 
@@ -145,8 +149,6 @@ fn test_cn_host_cn_with_spaces() -> Result<()> {
 #[test]
 fn test_load_certs_valid_pair() -> Result<()> {
     let so = &TEST_CERTS.proxeny_ss1;
-    println!("Loading {}, {}", so.keyfile, so.certfile);
-
     let result = load_certs(&so.keyfile, &so.certfile);
     assert!(result.is_ok());
 
@@ -161,8 +163,10 @@ fn test_load_certs_valid_pair() -> Result<()> {
 
 #[test]
 fn test_load_certs_invalid_pair() -> Result<()> {
-    let key_path = Utf8Path::new("tests/data/certs/snakeoil.key");
-    let other_cert_path = Utf8Path::new("tests/data/certs/snakeoil-2.pem");
+    let so1 = TEST_CERTS.proxeny_ss1.clone();
+    let so2 = TEST_CERTS.proxeny_ss2.clone();
+    let key_path = &so1.keyfile;
+    let other_cert_path = &so2.certfile;
 
     let result = load_certs(key_path, other_cert_path);
     assert!(result.is_err());
@@ -187,9 +191,9 @@ fn test_load_certs_empty_cert_file() -> Result<()> {
     empty_cert_file.write_all(b"")?;
     let empty_cert_path = Utf8PathBuf::from(empty_cert_file.path().to_str().unwrap());
 
-    let key_path = Utf8Path::new("tests/data/certs/snakeoil.key");
+    let so1 = TEST_CERTS.proxeny_ss1.clone();
 
-    let result = load_certs(&key_path, &empty_cert_path);
+    let result = load_certs(&so1.keyfile, &empty_cert_path);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("No certificates found in TLS .crt file"));
 
@@ -198,6 +202,7 @@ fn test_load_certs_empty_cert_file() -> Result<()> {
 
 
 #[tokio::test]
+#[test_log::test]
 async fn test_cert_watcher_file_updates() -> Result<()> {
     let temp_dir = tempdir()?;
     let key_path = temp_dir.path().join("test.key");
@@ -205,8 +210,9 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
 
     let context = Arc::new(RunContext::new(crate::config::Config::empty()));
 
-    fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
-    fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+    let so1 = TEST_CERTS.proxeny_ss1.clone();
+    fs::copy(&so1.keyfile, &key_path)?;
+    fs::copy(&so1.certfile, &cert_path)?;
 
     let provider = TestProvider::new(
         key_path.to_str().unwrap(),
@@ -230,9 +236,10 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Update the files
-    info!("Updating cert files");
-    fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
-    fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+    println!("Updating cert files");
+    let so2 = TEST_CERTS.proxeny_ss2.clone();
+    fs::copy(&so2.keyfile, &key_path)?;
+    fs::copy(&so2.certfile, &cert_path)?;
 
     // Wait for the watcher to process the event
     tokio::time::sleep(RELOAD_GRACE + Duration::from_millis(500)).await;
@@ -299,15 +306,12 @@ fn test_watchlist() -> Result<()> {
     let hc1 = TEST_CERTS.proxeny_ss1.clone();
     let hc2 = TEST_CERTS.www_ss.clone();
 
-    println!("HC {} {}", hc1.watch, hc2.watch);
-
     let context = Arc::new(RunContext::new(Config::empty()));
     let certs = vec![hc1, hc2];
     let store = CertStore::new(certs, context)?;
     let watchlist = store.watchlist();
 
     assert_eq!(watchlist.len(), 2);
-    println!("WL {watchlist:#?}");
     assert!(watchlist.contains(&Utf8PathBuf::from("target/certs/snakeoil-1.key")));
     assert!(watchlist.contains(&Utf8PathBuf::from("target/certs/snakeoil-1.crt")));
     Ok(())
