@@ -141,10 +141,6 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
 }
 
 
-pub trait CertificateProvider {
-    fn read_certs(&self) -> Vec<Arc<HostCertificate>>;
-}
-
 pub async fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<()> {
     let mut certwatcher = CertWatcher::new(certstore.clone(), context.clone());
     let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });

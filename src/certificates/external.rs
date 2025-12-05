@@ -5,9 +5,9 @@ use http::Uri;
 use tracing_log::log::debug;
 
 use crate::{
-    certificates::{CertificateProvider, HostCertificate},
-    config::{TlsConfigType},
     RunContext,
+    certificates::HostCertificate,
+    config::TlsConfigType
 };
 
 fn uri_host(uri: &String) -> Result<String> {
@@ -56,12 +56,9 @@ impl ExternalProvider {
             certs,
         })
     }
-}
 
-impl CertificateProvider for ExternalProvider {
 
-    fn read_certs(&self) -> Vec<Arc<HostCertificate>> {
+    pub fn read_certs(&self) -> Vec<Arc<HostCertificate>> {
         self.certs.clone()
     }
-
 }

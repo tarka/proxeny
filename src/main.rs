@@ -13,9 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{
-        CertificateProvider, external::ExternalProvider, store::CertStore,
-    },
+    certificates::{external::ExternalProvider, store::CertStore},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -70,13 +68,9 @@ fn main() -> Result<()> {
 
     let context = Arc::new(RunContext::new(config));
 
-    let providers = vec![
-        ExternalProvider::new(context.clone())?,
-    ];
-    let certs = providers.iter()
-        .map(|cp| cp.read_certs())
-        .flatten()
-        .collect();
+    let ext_provider = ExternalProvider::new(context.clone())?;
+    // Alternatively have ExternalProvider inject certs ala acme?
+    let certs = ext_provider.read_certs();
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
 
