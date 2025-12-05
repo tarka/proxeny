@@ -96,22 +96,6 @@ fn gen_cert(host: &str,
 
 static TEST_CERTS: LazyLock<TestCerts> = LazyLock::new(|| TestCerts::new().unwrap());
 
-#[derive(Clone)]
-struct TestProvider {
-    pub cert: Arc<HostCertificate>
-}
-impl TestProvider {
-    pub fn new(key: &str, cert: &str, watch: bool) -> Self {
-        let cert = test_cert(key, cert, watch);
-        Self { cert: Arc::new(cert) }
-    }
-}
-impl CertificateProvider for TestProvider {
-    fn read_certs(&self) -> Vec<Arc<HostCertificate>> {
-        vec![self.cert.clone()]
-    }
-}
-
 
 #[test]
 fn test_cn_host_valid_cn() -> Result<()> {
@@ -205,8 +189,8 @@ fn test_load_certs_empty_cert_file() -> Result<()> {
 #[test_log::test]
 async fn test_cert_watcher_file_updates() -> Result<()> {
     let temp_dir = tempdir()?;
-    let key_path = temp_dir.path().join("test.key");
-    let cert_path = temp_dir.path().join("test.crt");
+    let key_path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test.key")).unwrap();
+    let cert_path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test.crt")).unwrap();
 
     let context = Arc::new(RunContext::new(crate::config::Config::empty()));
 
@@ -214,13 +198,10 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     fs::copy(&so1.keyfile, &key_path)?;
     fs::copy(&so1.certfile, &cert_path)?;
 
-    let provider = TestProvider::new(
-        key_path.to_str().unwrap(),
-        cert_path.to_str().unwrap(),
-        true,
-    );
-    let store = Arc::new(CertStore::new(provider.read_certs(), context.clone())?);
-    let original_host = provider.cert.host.clone();
+    let hc = Arc::new(HostCertificate::new(key_path.clone(), cert_path.clone(), true)?);
+    let certs = vec![hc.clone()];
+    let store = Arc::new(CertStore::new(certs, context.clone())?);
+    let original_host = hc.host.clone();
 
     let original_cert = store.by_host(&original_host).unwrap();
     let original_expiry = original_cert.certs[0].not_after().to_string();
@@ -257,48 +238,26 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     Ok(())
 }
 
-
-#[test]
-fn test_cert_store_new() {
-    let provider = TestProvider::new(
-        "tests/data/certs/snakeoil.key",
-        "tests/data/certs/snakeoil.crt",
-        false
-    );
-    let context = Arc::new(RunContext::new(Config::empty()));
-    let store = CertStore::new(provider.read_certs(), context).unwrap();
-
-    assert!(store.by_host(&provider.cert.host).is_some());
-    assert!(store.by_file(&"tests/data/certs/snakeoil.key".into()).is_some());
-    assert!(store.by_file(&"tests/data/certs/snakeoil.crt".into()).is_some());
-}
-
 #[test]
 fn test_by_host() {
-    let provider = TestProvider::new(
-        "tests/data/certs/snakeoil.key",
-        "tests/data/certs/snakeoil.crt",
-        false
-    );
+    let cert = TEST_CERTS.proxeny_ss1.clone();
+    let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
-    let store = CertStore::new(provider.read_certs(), context).unwrap();
-    let found = store.by_host(&provider.cert.host).unwrap();
+    let store = CertStore::new(certs, context).unwrap();
+    let found = store.by_host(&cert.host).unwrap();
 
-    assert_eq!(found.host, provider.cert.host);
+    assert_eq!(found.host, cert.host);
 }
 
 #[test]
 fn test_by_file() {
-    let provider = TestProvider::new(
-        "tests/data/certs/snakeoil.key",
-        "tests/data/certs/snakeoil.crt",
-        false
-    );
+    let cert = TEST_CERTS.proxeny_ss1.clone();
+    let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
-    let store = CertStore::new(provider.read_certs(), context).unwrap();
-    let found = store.by_file(&"tests/data/certs/snakeoil.key".into()).unwrap();
+    let store = CertStore::new(certs, context).unwrap();
+    let found = store.by_file(&"target/certs/snakeoil-1.key".into()).unwrap();
 
-    assert_eq!(found.host, provider.cert.host);
+    assert_eq!(found.host, cert.host);
 }
 
 #[test]
@@ -319,28 +278,28 @@ fn test_watchlist() -> Result<()> {
 
 #[test]
 fn test_file_update_success() -> Result<()> {
+
     let temp_dir = tempdir()?;
     let key_path = temp_dir.path().join("test.key");
     let cert_path = temp_dir.path().join("test.crt");
-    fs::copy("tests/data/certs/snakeoil.key", &key_path)?;
-    fs::copy("tests/data/certs/snakeoil.crt", &cert_path)?;
+    let cert = TEST_CERTS.proxeny_ss1.clone();
+    fs::copy(&cert.keyfile, &key_path)?;
+    fs::copy(&cert.certfile, &cert_path)?;
 
-    let provider = TestProvider::new(
-        key_path.to_str().unwrap(),
-        cert_path.to_str().unwrap(),
-        true
-    );
+
+    let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
-    let store = CertStore::new(provider.read_certs(), context)?;
-    let original_host = provider.cert.host.clone();
+    let store = CertStore::new(certs, context)?;
+    let original_host = cert.host.clone();
 
     // The original cert is snakeoil
     let first_cert = store.by_host(&original_host).unwrap();
     assert!(first_cert.certs[0].subject_name().print_ex(0).unwrap().contains("proxeny.example.com"));
 
     // Now update the files to snakeoil-2
-    fs::copy("tests/data/certs/snakeoil-2.key", &key_path)?;
-    fs::copy("tests/data/certs/snakeoil-2.pem", &cert_path)?;
+    let cert = TEST_CERTS.proxeny_ss2.clone();
+    fs::copy(&cert.keyfile, &key_path)?;
+    fs::copy(&cert.certfile, &cert_path)?;
     let newcert = Arc::new(HostCertificate::from(&first_cert)?);
 
     store.update(newcert)?;
