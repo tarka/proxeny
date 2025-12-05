@@ -1,20 +1,89 @@
 use crate::{certificates::{store::CertStore, watcher::{CertWatcher, RELOAD_GRACE}}, config::Config, RunContext};
 
 use super::*;
-use std::{io::Write, time::Duration};
-use chrono::TimeZone;
+use std::{cell::LazyCell, fs::create_dir_all, io::Write, sync::LazyLock, time::Duration};
+
+use anyhow::Result;
+use chrono::{FixedOffset, TimeZone};
+use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
 use tempfile::{tempdir, NamedTempFile};
+use time::OffsetDateTime;
 
 // Common test utils
-pub fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
+fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
     let keyfile = Utf8PathBuf::from(key);
     let certfile = Utf8PathBuf::from(cert);
     HostCertificate::new(keyfile, certfile, watch)
         .expect("Failed to create test HostCertificate")
 }
 
+const CERT_BASE: &'static str = "target/certs";
+
+struct TestCerts {
+    pub proxeny_ss1: HostCertificate,
+    pub proxeny_ss2: HostCertificate,
+}
+
+impl TestCerts {
+    fn new() -> Result<Self> {
+        create_dir_all(CERT_BASE)?;
+        let host = "proxeny.example.com";
+        let name = "snakeoil-1";
+        let watch = false;
+        let not_before = DateTime::parse_from_rfc3339("2023-01-01 00:00:00+00:00")?;
+        let not_after = DateTime::parse_from_rfc3339("4096-01-01 00:00:00+00:00")?;
+
+        let proxeny_ss1 = gen_cert(host, name, watch, not_before, not_after)?;
+
+        let name = "snakeoil-2";
+        let proxeny_ss2 = gen_cert(host, name, watch, not_before, not_after)?;
+
+        Ok(Self {
+            proxeny_ss1,
+            proxeny_ss2,
+        })
+    }
+}
+
+fn gen_cert(host: &str,
+            name: &str,
+            watch: bool,
+            not_before: DateTime<FixedOffset>,
+            not_after: DateTime<FixedOffset>)
+            -> Result<HostCertificate>
+{
+    let base = Utf8PathBuf::try_from(CERT_BASE)?;
+    let mut params: CertificateParams = Default::default();
+    params.not_before = OffsetDateTime::from_unix_timestamp(not_before.timestamp())?;
+    params.not_after = OffsetDateTime::from_unix_timestamp(not_after.timestamp())?;
+    params.distinguished_name = DistinguishedName::new();
+    params
+        .distinguished_name
+        .push(DnType::OrganizationName, "Crab Widgets Pty Ltd");
+    params.subject_alt_names = vec![SanType::DnsName(host.try_into()?)];
+    let key_pair = KeyPair::generate()?;
+    let cert = params.self_signed(&key_pair)?;
+    let pem_serialized = cert.pem();
+
+    let keyfile = base.join(name).with_extension("key");
+    let certfile = base.join(name).with_extension("crt");
+    fs::write(&keyfile, pem_serialized.as_bytes())?;
+    fs::write(&certfile, key_pair.serialize_pem().as_bytes())?;
+
+    let host_certificate = HostCertificate::new(keyfile, certfile, watch)?;
+    Ok(host_certificate)
+}
+
+static TEST_CERTS: LazyLock<TestCerts> = LazyLock::new(|| TestCerts::new().unwrap());
+
+#[test]
+fn test_testcerts() -> Result<()> {
+    let tc = TestCerts::new()?;
+    Ok(())
+}
+
 #[derive(Clone)]
-pub struct TestProvider {
+struct TestProvider {
     pub cert: Arc<HostCertificate>
 }
 impl TestProvider {
@@ -65,10 +134,10 @@ fn test_cn_host_cn_with_spaces() -> Result<()> {
 
 #[test]
 fn test_load_certs_valid_pair() -> Result<()> {
-    let key_path = Utf8Path::new("tests/data/certs/snakeoil.key");
-    let cert_path = Utf8Path::new("tests/data/certs/snakeoil.crt");
+    let so = &TEST_CERTS.proxeny_ss1;
+    println!("Loading {}, {}", so.keyfile, so.certfile);
 
-    let result = load_certs(key_path, cert_path);
+    let result = load_certs(&so.keyfile, &so.certfile);
     assert!(result.is_ok());
 
     let (key, certs) = result.unwrap();
@@ -230,7 +299,7 @@ fn test_watchlist() -> Result<()> {
 
     let context = Arc::new(RunContext::new(Config::empty()));
     let certs = vec![hc1, hc2];
-    let store = CertStore::new(certs, context).unwrap();
+    let store = CertStore::new(certs, context)?;
     let watchlist = store.watchlist();
 
     assert_eq!(watchlist.len(), 2);
