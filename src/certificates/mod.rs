@@ -78,13 +78,11 @@ impl HostCertificate {
 }
 
 fn asn1time_to_datetime(not_after: &Asn1TimeRef) -> Result<DateTime<Utc>> {
-    // The diff function appears to return the negative of what's expected
-    // Based on testing, not_after.diff(&epoch) returns a negative value
     let epoch = Asn1Time::from_unix(0)?;
     let time_diff = not_after.diff(&epoch)?; // Returns -(expected_value)
 
-    // Calculate total seconds and negate the entire result
-    let total_seconds = -((time_diff.days * 86400) + time_diff.secs);
+    // Calculate total seconds and convert to positive
+    let total_seconds = -((time_diff.days as i64 * 86400) + time_diff.secs as i64);
 
     let datetime = DateTime::<Utc>::from_timestamp(total_seconds as i64, 0)
         .ok_or(anyhow!("Failed to create DateTime from timestamp"))?;

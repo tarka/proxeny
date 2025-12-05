@@ -1,13 +1,23 @@
-use crate::{certificates::{store::CertStore, watcher::{CertWatcher, RELOAD_GRACE}}, config::Config, RunContext};
+use crate::{
+    RunContext,
+    certificates::{
+        store::CertStore,
+        watcher::{CertWatcher, RELOAD_GRACE},
+    },
+    config::Config,
+};
 
 use super::*;
-use std::{cell::LazyCell, fs::create_dir_all, io::Write, sync::LazyLock, time::Duration};
+use std::{
+    fs::create_dir_all,
+    io::Write,
+    process::Command,
+    sync::LazyLock, time::Duration,
+};
 
 use anyhow::Result;
-use chrono::{FixedOffset, TimeZone};
-use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
-use tempfile::{tempdir, NamedTempFile};
-use time::OffsetDateTime;
+use chrono::{Days, NaiveDate, TimeZone};
+use tempfile::{NamedTempFile, tempdir};
 
 // Common test utils
 fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
@@ -20,8 +30,9 @@ fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
 const CERT_BASE: &'static str = "target/certs";
 
 struct TestCerts {
-    pub proxeny_ss1: HostCertificate,
-    pub proxeny_ss2: HostCertificate,
+    pub proxeny_ss1: Arc<HostCertificate>,
+    pub proxeny_ss2: Arc<HostCertificate>,
+    pub www_ss: Arc<HostCertificate>,
 }
 
 impl TestCerts {
@@ -29,18 +40,22 @@ impl TestCerts {
         create_dir_all(CERT_BASE)?;
         let host = "proxeny.example.com";
         let name = "snakeoil-1";
-        let watch = false;
-        let not_before = DateTime::parse_from_rfc3339("2023-01-01 00:00:00+00:00")?;
-        let not_after = DateTime::parse_from_rfc3339("4096-01-01 00:00:00+00:00")?;
 
-        let proxeny_ss1 = gen_cert(host, name, watch, not_before, not_after)?;
+        let not_before = Utc::now().date_naive();
+        let not_after = not_before.clone().checked_add_days(Days::new(365)).unwrap();
+
+        let proxeny_ss1 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "snakeoil-2";
-        let proxeny_ss2 = gen_cert(host, name, watch, not_before, not_after)?;
+        let proxeny_ss2 = gen_cert(host, name, true, not_before, not_after)?;
+
+        let name = "www.example.com";
+        let www_ss = gen_cert(name, name, false, not_before, not_after)?;
 
         Ok(Self {
             proxeny_ss1,
             proxeny_ss2,
+            www_ss,
         })
     }
 }
@@ -48,39 +63,34 @@ impl TestCerts {
 fn gen_cert(host: &str,
             name: &str,
             watch: bool,
-            not_before: DateTime<FixedOffset>,
-            not_after: DateTime<FixedOffset>)
-            -> Result<HostCertificate>
+            not_before: NaiveDate,
+            not_after: NaiveDate)
+            -> Result<Arc<HostCertificate>>
 {
     let base = Utf8PathBuf::try_from(CERT_BASE)?;
-    let mut params: CertificateParams = Default::default();
-    params.not_before = OffsetDateTime::from_unix_timestamp(not_before.timestamp())?;
-    params.not_after = OffsetDateTime::from_unix_timestamp(not_after.timestamp())?;
-    params.distinguished_name = DistinguishedName::new();
-    params
-        .distinguished_name
-        .push(DnType::OrganizationName, "Crab Widgets Pty Ltd");
-    params.subject_alt_names = vec![SanType::DnsName(host.try_into()?)];
-    let key_pair = KeyPair::generate()?;
-    let cert = params.self_signed(&key_pair)?;
-    let pem_serialized = cert.pem();
-
     let keyfile = base.join(name).with_extension("key");
     let certfile = base.join(name).with_extension("crt");
-    fs::write(&keyfile, pem_serialized.as_bytes())?;
-    fs::write(&certfile, key_pair.serialize_pem().as_bytes())?;
+    if ! (keyfile.exists() && certfile.exists()) {
+
+        let subj = "/C=AU/ST=NSW/L=Sydney/O=Example Org./CN=";
+        let out = Command::new("openssl")
+            .arg("req")
+            .arg("-x509")
+            .arg("-noenc")
+            .arg("-not_before").arg(not_before.format("%Y%m%d000000Z").to_string())
+            .arg("-not_after").arg(not_after.format("%Y%m%d000000Z").to_string())
+            .arg("-out").arg(&certfile)
+            .arg("-keyout").arg(&keyfile)
+            .arg("-subj").arg(format!("{subj}{host}"))
+            .output()?;
+        info!("OPENSSL: {out:#?}");
+    }
 
     let host_certificate = HostCertificate::new(keyfile, certfile, watch)?;
-    Ok(host_certificate)
+    Ok(Arc::new(host_certificate))
 }
 
 static TEST_CERTS: LazyLock<TestCerts> = LazyLock::new(|| TestCerts::new().unwrap());
-
-#[test]
-fn test_testcerts() -> Result<()> {
-    let tc = TestCerts::new()?;
-    Ok(())
-}
 
 #[derive(Clone)]
 struct TestProvider {
@@ -286,16 +296,10 @@ fn test_by_file() {
 
 #[test]
 fn test_watchlist() -> Result<()> {
-    let hc1 = Arc::new(HostCertificate::new(
-        "tests/data/certs/snakeoil.key".into(),
-        "tests/data/certs/snakeoil.crt".into(),
-        true
-    )?);
-    let hc2 = Arc::new(HostCertificate::new(
-        "tests/data/certs/snakeoil-2.key".into(),
-        "tests/data/certs/snakeoil-2.pem".into(),
-        false
-    )?);
+    let hc1 = TEST_CERTS.proxeny_ss1.clone();
+    let hc2 = TEST_CERTS.www_ss.clone();
+
+    println!("HC {} {}", hc1.watch, hc2.watch);
 
     let context = Arc::new(RunContext::new(Config::empty()));
     let certs = vec![hc1, hc2];
@@ -303,8 +307,9 @@ fn test_watchlist() -> Result<()> {
     let watchlist = store.watchlist();
 
     assert_eq!(watchlist.len(), 2);
-    assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.key")));
-    assert!(watchlist.contains(&Utf8PathBuf::from("tests/data/certs/snakeoil.crt")));
+    println!("WL {watchlist:#?}");
+    assert!(watchlist.contains(&Utf8PathBuf::from("target/certs/snakeoil-1.key")));
+    assert!(watchlist.contains(&Utf8PathBuf::from("target/certs/snakeoil-1.crt")));
     Ok(())
 }
 
