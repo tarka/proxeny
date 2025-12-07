@@ -10,9 +10,11 @@ use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
 use boring::asn1::{Asn1Time, Asn1TimeRef};
+//use boring::asn1::{Asn1Time, Asn1TimeRef};
 use camino::{Utf8Path, Utf8PathBuf};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 
+use futures::future::try_join_all;
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
     pkey::{PKey, Private},
@@ -20,7 +22,7 @@ use pingora_boringssl::{
 };
 use tracing_log::log::info;
 
-use crate::{certificates::{store::CertStore, watcher::CertWatcher}, errors::ProxenyError, RunContext};
+use crate::{certificates::{acme::AcmeRuntime, store::CertStore, watcher::CertWatcher}, errors::ProxenyError, RunContext};
 
 #[derive(Debug)]
 pub struct HostCertificate {
@@ -47,7 +49,8 @@ impl HostCertificate {
         info!("Certificate found: {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
 
         let not_after = certs[0].not_after();
-        let expires = asn1time_to_datetime(not_after)?;
+        //let expires = asn1time_to_datetime(not_after)?;
+        let expires = Utc::now();
 
         Ok(HostCertificate {
             host,
@@ -142,9 +145,18 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
 
 
 pub async fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<()> {
+
+    let acme = AcmeRuntime::new(certstore.clone(), context.clone())?;
+    let acme_handle = tokio::spawn(async move {
+        acme.run().await
+    });
+
     let mut certwatcher = CertWatcher::new(certstore.clone(), context.clone());
-    let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
-    watcher_handle.await??;
+    let watcher_handle = tokio::spawn(async move {
+        certwatcher.watch().await
+    });
+
+    try_join_all(vec![acme_handle, watcher_handle]).await?;
 
     Ok(())
 }

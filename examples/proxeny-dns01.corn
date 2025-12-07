@@ -21,6 +21,7 @@ let {
           acme = {
             acme_provider = "letsencrypt"
             contact = "admin@example.com"
+            directory = "/var/lib/my_rundir/acme"
             challenge_type = {
               type = "dns-01"
               domain = "example.com"

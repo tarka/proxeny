@@ -31,7 +31,7 @@ impl CertWatcher {
     }
 
     pub async fn watch(&mut self) -> Result<()> {
-        info!("Starting cert watcher");
+        info!("Starting certificate watcher runtime");
 
         let handler = {
             let ev_tx = self.ev_tx.clone();

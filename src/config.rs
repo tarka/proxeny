@@ -74,11 +74,15 @@ pub enum AcmeChallenge {
     Http01,
 }
 
+#[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 pub struct TlsAcmeConfig {
     #[serde(default)]
     pub acme_provider: AcmeProvider,
     pub challenge_type: AcmeChallenge,
+    // FIXME: Need a method to default Utf8PathBuf here.
+    #[serde_inline_default("/var/lib/proxeny/acme".to_string())]
+    pub directory: String,
     pub contact: String,
 }
 
@@ -204,6 +208,7 @@ mod tests {
             TlsAcmeConfig {
                 contact: _,
                 acme_provider: AcmeProvider::LetsEncrypt,
+                directory: _,
                 challenge_type: AcmeChallenge::Dns01(DnsProvider {
                     domain: _,
                     dns_provider: zone_update::Providers::PorkBun(_)

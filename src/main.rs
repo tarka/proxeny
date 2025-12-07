@@ -13,7 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{external::ExternalProvider, store::CertStore},
+    certificates::{acme::AcmeRuntime, external::ExternalProvider, store::CertStore},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -73,7 +73,6 @@ fn main() -> Result<()> {
     let certs = ext_provider.read_certs();
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
-
 
     ///// Runtime start
 

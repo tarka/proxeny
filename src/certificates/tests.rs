@@ -16,6 +16,7 @@ use std::{
 };
 
 use anyhow::Result;
+use boring::asn1::Asn1Time;
 use chrono::{Days, NaiveDate, TimeZone};
 use tempfile::{NamedTempFile, tempdir};
 
