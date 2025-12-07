@@ -14,6 +14,10 @@ use crate::{
 // server support. However we don't actually support multiple servers
 // in the config at the moment. This may change, so this is left in
 // place for now.
+//
+// TODO: It _might_ be possible to return references rather than Arcs
+// here, which would enforce the store as being the source of
+// truth. But a bit fiddly for MVP version.
 pub struct CertStore {
     context: Arc<RunContext>,
     by_host: papaya::HashMap<String, Arc<HostCertificate>>,
