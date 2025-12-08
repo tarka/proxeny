@@ -8,6 +8,7 @@ use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use rustls::crypto::CryptoProvider;
 use tokio::sync::watch;
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
@@ -66,6 +67,9 @@ fn main() -> Result<()> {
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     let config = Config::from_file(&config_file)?;
 
+    rustls::crypto::aws_lc_rs::default_provider().install_default()
+        .expect("Failed to install Rustls crypto provider");
+
     let context = Arc::new(RunContext::new(config));
 
     let ext_provider = ExternalProvider::new(context.clone())?;
@@ -81,7 +85,9 @@ fn main() -> Result<()> {
         let context = context.clone();
         thread::spawn(move || -> Result<()> {
             info!("Starting Certificate Management runtime");
-            let cert_runtime = tokio::runtime::Builder::new_current_thread()
+            let cert_runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_time()
+                .enable_io()
                 .build()?;
 
             cert_runtime.block_on(

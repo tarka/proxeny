@@ -1,9 +1,10 @@
-use std::{fs::create_dir_all, sync::Arc, time::Duration};
+use std::{fs::create_dir_all, net::SocketAddr, sync::Arc, time::Duration};
 
-use acme_micro::{create_p384_key, Certificate, Directory, DirectoryUrl};
 use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
-use tracing_log::log::{info, warn};
+use dnsclient::{r#async::DNSClient, UpstreamServer};
+use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
+use tracing_log::log::{debug, info, error};
 
 use crate::{
     certificates::{store::CertStore, HostCertificate}, config::{AcmeChallenge, AcmeProvider, DnsProvider, TlsConfigType}, RunContext
@@ -24,6 +25,11 @@ pub struct AcmeRuntime {
     context: Arc<RunContext>,
     certstore: Arc<CertStore>,
     hosts: Vec<AcmeHost>,
+}
+
+struct PemCertificate {
+    private_key: String,
+    cert_chain: String,
 }
 
 impl AcmeRuntime {
@@ -128,25 +134,23 @@ impl AcmeRuntime {
     }
 
     async fn renew_dns01(&self, ahost: &AcmeHost, provider: &DnsProvider) -> Result<()> {
-        // TODO: We're using acme-micro here as it's the simplest to
-        // use/debug. However as it doesn't have an async impl we need
-        // to wrap it in `spawn_blocking`. An async-native ACME client
-        // such as `lers` would be better, but it seems unmaintained
-        // and didn't work out of the box. This could be revisited.
-        let hostname = ahost.hostname.clone();
-        let domain = provider.domain.clone();
-        let contact = ahost.contact.clone();
-        let provider = provider.clone();
-
-        let cert = tokio::task::spawn_blocking(
-            move || renew_acme_micro(hostname, domain, contact, provider)
-        ).await??;
+        // let cert = renew_acme_micro(ahost, provider).await?;
+        let cert = match renew_acme_micro(ahost, provider).await {
+            Ok(cert) => {
+                info!("Cert OK");
+                cert
+            }
+            Err(err) => {
+                error!("Error renewing certificate: {err}");
+                return Err(err)
+            }
+        };
 
         Ok(())
     }
 
-    async fn renew_http01(&self, host: &AcmeHost) -> Result<()> {
-        unimplemented!()
+    async fn renew_http01(&self, _host: &AcmeHost) -> Result<()> {
+        todo!()
     }
 
     /// Returns certs that need creating or refreshing
@@ -161,56 +165,102 @@ impl AcmeRuntime {
 }
 
 
-fn renew_acme_micro(hostname: String, domain: String, contact: String, provider: DnsProvider) -> Result<Certificate> {
-    let email = format!("mailto:{}", contact);
-    let txt_name = format!("_acme-challenge.{}", hostname);
-    let fqdn = format!("{}.{}", hostname, domain);
+async fn renew_acme_micro(acme_host: &AcmeHost, provider: &DnsProvider) -> Result<PemCertificate> {
+    let contact = format!("mailto:{}", acme_host.contact);
+    let shortname = acme_host.hostname
+        .strip_suffix(&format!(".{}", provider.domain))
+        .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.hostname))?;
+
+    let txt_name = format!("_acme-challenge.{}", shortname);
+    let txt_fqdn = format!("{txt_name}.{}", provider.domain);
 
     let dns_config = zone_update::Config {
         domain: provider.domain.clone(),
         dry_run: false,
     };
-    let dns_client = provider.dns_provider.blocking_impl(dns_config);
+    let dns_client = provider.dns_provider.async_impl(dns_config);
 
-    let dir = Directory::from_url(DirectoryUrl::LetsEncrypt)?;
+    // TODO: Save/load account
+    info!("Initialising ACME account");
+    let (account, _credentials) = Account::builder()?
+        .create(
+            &instant_acme::NewAccount {
+                contact: &[&contact],
+                terms_of_service_agreed: true,
+                only_return_existing: false,
+            },
+            LetsEncrypt::Staging.url().to_owned(),
+            None,
+        )
+        .await?;
 
-    // TODO: Save/load accounts
+    let hid = Identifier::Dns(acme_host.hostname.clone());
+    info!("Create order for {}", acme_host.hostname);
+    let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
 
-    info!("Registering ACME account");
-    let acc = dir.register_account(vec![email])?;
+    let mut authz = order.authorizations();
+    let mut auth = authz.next().await
+        .ok_or(anyhow!("No authorisation found for {shortname} in order"))??;
 
-    info!("Placing ACME order");
-    let mut ord_new = acc.new_order(&fqdn, &[])?;
+    info!("Processing {:?}", auth.status);
+    match auth.status {
+        AuthorizationStatus::Pending => {}
+        // It's technically possibly to pick up an old auth order here
+        // which returns ::Valid?
+        _ => todo!(),
+    }
 
-    let ord_csr = loop {
+    info!("Creating challenge");
+    let mut challenge = auth
+        .challenge(ChallengeType::Dns01)
+        .ok_or_else(|| anyhow::anyhow!("No DNS-01 challenge found"))?;
 
-        // If the domain(s) has already been authorized in a previous
-        // order we may be able to skip validation. The ACME API decides.
-        if let Some(ord_csr) = ord_new.confirm_validations() {
-            break ord_csr;
+
+    let token = challenge.key_authorization().dns_value();
+    info!("Creating TXT: {txt_name} -> {}", token);
+    dns_client.create_txt_record(&txt_name, &token).await?;
+
+    wait_for_dns(txt_fqdn).await?;
+
+    info!("Setting challenge to ready");
+    challenge.set_ready().await?;
+
+    info!("Polling challenge status");
+    let status = order.poll_ready(&RetryPolicy::default()).await?;
+    if status != OrderStatus::Ready {
+        dns_client.delete_txt_record(&txt_name).await?;
+        return Err(anyhow!("Unexpected order status: {status:?}"));
+    }
+
+    let private_key = order.finalize().await?;
+    let cert_chain = order.poll_certificate(&RetryPolicy::default()).await?;
+
+    info!("====== Cert Chain ======\n{cert_chain}");
+
+    Ok(PemCertificate {
+        cert_chain,
+        private_key,
+    })
+}
+
+async fn wait_for_dns(txt_fqdn: String) -> Result<(), anyhow::Error> {
+    info!("Waiting for record {txt_fqdn} to go live");
+
+    // TODO: Use a 'known good' DNS server for now to avoid
+    // complications from local DNS setups (e.g. NXDOMAIN caching). We
+    // may want to change this?
+    let upstream = UpstreamServer::new(SocketAddr::from(([1,1,1,1], 53)));
+    let lookup = DNSClient::new(vec![upstream]);
+
+    for _i in 0..30 {
+        debug!("Lookup for {txt_fqdn}");
+        let txts = lookup.query_txt(&txt_fqdn).await?;
+        if txts.len() > 0 {
+            info!("Found {txt_fqdn}");
+            break;
         }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
 
-        let auths = ord_new.authorizations()?;
-
-        let challenge = auths[0].dns_challenge()
-            .ok_or(anyhow!("Failed to retrieve challenge token for {txt_name}"))?;
-        let token = challenge.dns_proof()?;
-
-        info!("Creating challenge TXT record '{txt_name}' -> '{token}'");
-        dns_client.create_txt_record(&txt_name, &token)?;
-
-        println!("Requesting validation from ACME");
-        challenge.validate(Duration::from_millis(5000))?;
-
-        ord_new.refresh()?;
-    };
-
-    let pkey_pri = create_p384_key()?;
-    let ord_cert = ord_csr.finalize_pkey(pkey_pri, Duration::from_millis(5000))?;
-
-    // Finally download the certificate.
-    info!("Certificate created; downloading");
-    let cert = ord_cert.download_cert()?;
-
-    Ok(cert)
+    Ok(())
 }
