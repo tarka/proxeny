@@ -58,7 +58,7 @@ impl CertWatcher {
                     }
                 },
                 _ = quit_rx.changed() => {
-                    info!("Quitting certificate watcher loop.");
+                    info!("Quitting certificate watcher runtime");
                     break;
                 },
             };

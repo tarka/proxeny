@@ -4,7 +4,8 @@ use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
 use dnsclient::{r#async::DNSClient, UpstreamServer};
 use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
-use tracing_log::log::{debug, info, error};
+use tracing_log::log::{debug, error, info, warn};
+use zone_update::async_impl::AsyncDnsProvider;
 
 use crate::{
     certificates::{store::CertStore, HostCertificate}, config::{AcmeChallenge, AcmeProvider, DnsProvider, TlsConfigType}, RunContext
@@ -30,6 +31,13 @@ pub struct AcmeRuntime {
 struct PemCertificate {
     private_key: String,
     cert_chain: String,
+}
+
+struct AcmeParams<'a> {
+    hostname: &'a String,
+    txt_name: &'a String,
+    txt_fqdn: &'a String,
+    contact: &'a String,
 }
 
 impl AcmeRuntime {
@@ -117,7 +125,7 @@ impl AcmeRuntime {
                 //     }
                 // },
                 _ = quit_rx.changed() => {
-                    info!("Quitting certificate watcher loop.");
+                    info!("Quitting ACME runtime");
                     break;
                 },
             };
@@ -133,18 +141,42 @@ impl AcmeRuntime {
         }
     }
 
-    async fn renew_dns01(&self, ahost: &AcmeHost, provider: &DnsProvider) -> Result<()> {
-        // let cert = renew_acme_micro(ahost, provider).await?;
-        let cert = match renew_acme_micro(ahost, provider).await {
-            Ok(cert) => {
-                info!("Cert OK");
-                cert
-            }
+    async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<()> {
+        let contact = format!("mailto:{}", acme_host.contact);
+        let shortname = acme_host.hostname
+            .strip_suffix(&format!(".{}", provider.domain))
+            .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.hostname))?;
+
+        let txt_name = format!("_acme-challenge.{}", shortname);
+        let txt_fqdn = format!("{txt_name}.{}", provider.domain);
+
+        let dns_config = zone_update::Config {
+            domain: provider.domain.clone(),
+            dry_run: false,
+        };
+        let dns_client = provider.dns_provider.async_impl(dns_config);
+
+        let params = AcmeParams {
+            hostname: &acme_host.hostname,
+            txt_name: &txt_name,
+            txt_fqdn: &txt_fqdn,
+            contact: &contact,
+        };
+
+        let certificate_r = renew_instant_acme(params, &dns_client).await;
+
+        // Cleanup before evaluating certificate for errors
+        attempt_dns_cleanup(txt_name, dns_client).await;
+
+        let pem_certificate = match certificate_r {
+            Ok(cert) => cert,
             Err(err) => {
                 error!("Error renewing certificate: {err}");
                 return Err(err)
             }
         };
+
+        info!("====== Cert Chain ======\n{}", pem_certificate.cert_chain);
 
         Ok(())
     }
@@ -156,7 +188,7 @@ impl AcmeRuntime {
     /// Returns certs that need creating or refreshing
     fn pending(&self) -> Vec<&AcmeHost> {
         self.hosts.iter()
-        // Either None or expiring with 30 days
+            // Either None or expiring with 30 days
             .filter(|ah| ! self.certstore.by_host(&ah.hostname)
                     .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW)))
             .collect()
@@ -164,28 +196,13 @@ impl AcmeRuntime {
 
 }
 
+async fn renew_instant_acme(params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
 
-async fn renew_acme_micro(acme_host: &AcmeHost, provider: &DnsProvider) -> Result<PemCertificate> {
-    let contact = format!("mailto:{}", acme_host.contact);
-    let shortname = acme_host.hostname
-        .strip_suffix(&format!(".{}", provider.domain))
-        .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.hostname))?;
-
-    let txt_name = format!("_acme-challenge.{}", shortname);
-    let txt_fqdn = format!("{txt_name}.{}", provider.domain);
-
-    let dns_config = zone_update::Config {
-        domain: provider.domain.clone(),
-        dry_run: false,
-    };
-    let dns_client = provider.dns_provider.async_impl(dns_config);
-
-    // TODO: Save/load account
     info!("Initialising ACME account");
     let (account, _credentials) = Account::builder()?
         .create(
             &instant_acme::NewAccount {
-                contact: &[&contact],
+                contact: &[params.contact],
                 terms_of_service_agreed: true,
                 only_return_existing: false,
             },
@@ -193,15 +210,12 @@ async fn renew_acme_micro(acme_host: &AcmeHost, provider: &DnsProvider) -> Resul
             None,
         )
         .await?;
-
-    let hid = Identifier::Dns(acme_host.hostname.clone());
-    info!("Create order for {}", acme_host.hostname);
+    info!("Create order for {}", params.hostname);
+    let hid = Identifier::Dns(params.hostname.clone());
     let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
-
     let mut authz = order.authorizations();
     let mut auth = authz.next().await
-        .ok_or(anyhow!("No authorisation found for {shortname} in order"))??;
-
+        .ok_or(anyhow!("No authorisation found for {} in order", params.hostname))??;
     info!("Processing {:?}", auth.status);
     match auth.status {
         AuthorizationStatus::Pending => {}
@@ -209,18 +223,15 @@ async fn renew_acme_micro(acme_host: &AcmeHost, provider: &DnsProvider) -> Resul
         // which returns ::Valid?
         _ => todo!(),
     }
-
     info!("Creating challenge");
     let mut challenge = auth
         .challenge(ChallengeType::Dns01)
         .ok_or_else(|| anyhow::anyhow!("No DNS-01 challenge found"))?;
-
-
     let token = challenge.key_authorization().dns_value();
-    info!("Creating TXT: {txt_name} -> {}", token);
-    dns_client.create_txt_record(&txt_name, &token).await?;
+    info!("Creating TXT: {} -> {}", params.txt_name, token);
+    dns_client.create_txt_record(params.txt_name, &token).await?;
 
-    wait_for_dns(txt_fqdn).await?;
+    wait_for_dns(params.txt_fqdn).await?;
 
     info!("Setting challenge to ready");
     challenge.set_ready().await?;
@@ -228,14 +239,12 @@ async fn renew_acme_micro(acme_host: &AcmeHost, provider: &DnsProvider) -> Resul
     info!("Polling challenge status");
     let status = order.poll_ready(&RetryPolicy::default()).await?;
     if status != OrderStatus::Ready {
-        dns_client.delete_txt_record(&txt_name).await?;
+        dns_client.delete_txt_record(params.txt_name).await?;
         return Err(anyhow!("Unexpected order status: {status:?}"));
     }
 
     let private_key = order.finalize().await?;
     let cert_chain = order.poll_certificate(&RetryPolicy::default()).await?;
-
-    info!("====== Cert Chain ======\n{cert_chain}");
 
     Ok(PemCertificate {
         cert_chain,
@@ -243,10 +252,10 @@ async fn renew_acme_micro(acme_host: &AcmeHost, provider: &DnsProvider) -> Resul
     })
 }
 
-async fn wait_for_dns(txt_fqdn: String) -> Result<(), anyhow::Error> {
+async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
     info!("Waiting for record {txt_fqdn} to go live");
 
-    // TODO: Use a 'known good' DNS server for now to avoid
+    // TODO: For now we use a 'known good' DNS server for now to avoid
     // complications from local DNS setups (e.g. NXDOMAIN caching). We
     // may want to change this?
     let upstream = UpstreamServer::new(SocketAddr::from(([1,1,1,1], 53)));
@@ -257,10 +266,20 @@ async fn wait_for_dns(txt_fqdn: String) -> Result<(), anyhow::Error> {
         let txts = lookup.query_txt(&txt_fqdn).await?;
         if txts.len() > 0 {
             info!("Found {txt_fqdn}");
-            break;
+            return Ok(());
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 
-    Ok(())
+    Err(anyhow!("Failed to find record {txt_fqdn} in public DNS"))
+}
+
+async fn attempt_dns_cleanup(txt_name: String, dns_client: Box<dyn AsyncDnsProvider>) {
+    info!("Attempting cleanup of {txt_name} record");
+    match dns_client.delete_txt_record(&txt_name).await {
+        Ok(_) => {},
+        Err(d_err) => {
+            warn!("Failed to delete DNS record {txt_name}: {d_err}");
+        }
+    }
 }

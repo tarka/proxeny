@@ -30,10 +30,10 @@ tokio = { version = "1.48.0", features = ["macros", "rt", "sync"] }
 chrono = { version = "0.4.42", default-features = false, features = ["now"] }
 futures = "0.3.31"
 boring = "4.19.0"
-zone-update = {path = "../zone-update", features = ["async"] }
 dnsclient = "0.2.0"
 instant-acme = "0.8.4"
 rustls = "0.23.35"
+zone-update = { version = "0.5.3", features = ["async"] }
 
 [lints.rust]
 # FIXME: For early dev, remove before release

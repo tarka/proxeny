@@ -12,7 +12,7 @@ use anyhow::{anyhow, bail, Result};
 use boring::asn1::{Asn1Time, Asn1TimeRef};
 //use boring::asn1::{Asn1Time, Asn1TimeRef};
 use camino::{Utf8Path, Utf8PathBuf};
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use futures::future::try_join_all;
 use pingora_core::{ErrorType, OkOrErr};
@@ -49,8 +49,7 @@ impl HostCertificate {
         info!("Certificate found: {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
 
         let not_after = certs[0].not_after();
-        //let expires = asn1time_to_datetime(not_after)?;
-        let expires = Utc::now();
+        let expires = asn1time_to_datetime(not_after)?;
 
         Ok(HostCertificate {
             host,

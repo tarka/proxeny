@@ -8,13 +8,12 @@ use std::thread;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use rustls::crypto::CryptoProvider;
 use tokio::sync::watch;
 use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{acme::AcmeRuntime, external::ExternalProvider, store::CertStore},
+    certificates::{external::ExternalProvider, store::CertStore},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 

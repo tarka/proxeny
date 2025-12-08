@@ -4400,7 +4400,9 @@ dependencies = [
 
 [[package]]
 name = "zone-update"
-version = "0.5.2"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bbed53186de2bee96e355f8abb59425b8a8ee03d11c11f6357f48487cb6fc5d"
 dependencies = [
  "async-trait",
  "blocking",
