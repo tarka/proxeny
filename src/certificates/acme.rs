@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
 use dnsclient::{r#async::DNSClient, UpstreamServer};
 use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
+use tokio::fs;
 use tracing_log::log::{debug, error, info, warn};
 use zone_update::async_impl::AsyncDnsProvider;
 
@@ -57,13 +58,14 @@ impl AcmeRuntime {
                 let cert_base = Utf8PathBuf::from(aconf.directory.clone());
                 let cert_dir = cert_base
                     .join(&host);
+                info!("Creating ACME certificate dir {cert_base}");
                 create_dir_all(&cert_dir)
-                    .context("Creating ACME certificate dir {cert_base}")?;
+                    .context("Error creating directory {cert_base}")?;
 
                 let cert_file = cert_dir
                     .join(&host);
-                let keyfile = cert_file.with_extension(".key");
-                let certfile = cert_file.with_extension(".crt");
+                let keyfile = cert_file.with_extension("key");
+                let certfile = cert_file.with_extension("crt");
 
                 let acme_host = AcmeHost {
                     hostname: host,
@@ -150,18 +152,18 @@ impl AcmeRuntime {
         let txt_name = format!("_acme-challenge.{}", shortname);
         let txt_fqdn = format!("{txt_name}.{}", provider.domain);
 
-        let dns_config = zone_update::Config {
-            domain: provider.domain.clone(),
-            dry_run: false,
-        };
-        let dns_client = provider.dns_provider.async_impl(dns_config);
-
         let params = AcmeParams {
             hostname: &acme_host.hostname,
             txt_name: &txt_name,
             txt_fqdn: &txt_fqdn,
             contact: &contact,
         };
+
+        let dns_config = zone_update::Config {
+            domain: provider.domain.clone(),
+            dry_run: false,
+        };
+        let dns_client = provider.dns_provider.async_impl(dns_config);
 
         let certificate_r = renew_instant_acme(params, &dns_client).await;
 
@@ -176,7 +178,11 @@ impl AcmeRuntime {
             }
         };
 
-        info!("====== Cert Chain ======\n{}", pem_certificate.cert_chain);
+        debug!("====== Cert Chain ======\n{}", pem_certificate.cert_chain);
+
+        info!("Writing certificate and key");
+        fs::write(&acme_host.keyfile, pem_certificate.private_key.as_bytes()).await?;
+        fs::write(&acme_host.certfile, pem_certificate.cert_chain.as_bytes()).await?;
 
         Ok(())
     }
@@ -276,6 +282,8 @@ async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
 
 async fn attempt_dns_cleanup(txt_name: String, dns_client: Box<dyn AsyncDnsProvider>) {
     info!("Attempting cleanup of {txt_name} record");
+    // FIXME: Doesn't handle multiple records currently. We need to
+    // add this to zone-update.
     match dns_client.delete_txt_record(&txt_name).await {
         Ok(_) => {},
         Err(d_err) => {
