@@ -45,6 +45,14 @@ fn rewrite_port(host: &str, newport: &str) -> String {
     format!("{host_only}:{newport}")
 }
 
+fn strip_port(host_header: &str) -> String {
+    if let Some(i) = host_header.rfind(':') {
+        host_header[0..i].to_string()
+    } else {
+        host_header.to_string()
+    }
+}
+
 
 #[async_trait]
 impl ServeHttp for TlsRedirector {
@@ -108,15 +116,16 @@ impl ProxyHttp for Proxeny {
     }
 
     async fn upstream_peer(&self, session: &mut Session, _ctx: &mut Self::CTX) -> pingora_core::Result<Box<HttpPeer>> {
-        let host = session.req_header().headers.get(header::HOST)
+        let host_header = session.req_header().headers.get(header::HOST)
             .or_err(ErrorType::InvalidHTTPHeader, "No Host header in request")?
             .to_str()
             .or_err(ErrorType::InvalidHTTPHeader, "Invalid Host header")?;
+        let host = strip_port(host_header);
         let path = &session.req_header().uri.path();
         info!("Request: {host} -> {path}");
 
         let pinned = self.routes_by_host.pin();
-        let router = pinned.get(host)
+        let router = pinned.get(&host)
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Hostname not found in backends")?;
         let matched = router.lookup(path)
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Path not found in host backends")?;
@@ -158,6 +167,24 @@ mod tests {
         assert_eq!("example.com:8443", replaced);
         let replaced = rewrite_port("example.com", "8443");
         assert_eq!("example.com", replaced);
+        Ok(())
+    }
+
+    #[test]
+    fn test_port_strip() -> Result<()> {
+        let host_header = "example.com:8443";
+        let host = strip_port(host_header);
+        assert_eq!("example.com", host);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_port_strip() -> Result<()> {
+        let host_header = "example.com";
+        let host = strip_port(host_header);
+        assert_eq!("example.com", host);
+
         Ok(())
     }
 

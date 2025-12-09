@@ -8,6 +8,7 @@ pub struct Match<'a> {
     pub path: String,
 }
 
+#[derive(Debug)]
 pub struct Router {
     tree: PathTree<Backend>,
 }
