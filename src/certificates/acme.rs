@@ -184,6 +184,10 @@ impl AcmeRuntime {
         fs::write(&acme_host.keyfile, pem_certificate.private_key.as_bytes()).await?;
         fs::write(&acme_host.certfile, pem_certificate.cert_chain.as_bytes()).await?;
 
+        info!("Loading new certificate");
+        let hc = Arc::new(HostCertificate::new(acme_host.keyfile.clone(), acme_host.certfile.clone(), false)?);
+        self.certstore.upsert(hc)?;
+
         Ok(())
     }
 
@@ -212,7 +216,7 @@ async fn renew_instant_acme(params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDn
                 terms_of_service_agreed: true,
                 only_return_existing: false,
             },
-            LetsEncrypt::Staging.url().to_owned(),
+            LetsEncrypt::Production.url().to_owned(),
             None,
         )
         .await?;
