@@ -31,8 +31,8 @@ fn test_cert(key: &str, cert: &str, watch: bool) -> HostCertificate {
 const CERT_BASE: &'static str = "target/certs";
 
 struct TestCerts {
-    pub proxeny_ss1: Arc<HostCertificate>,
-    pub proxeny_ss2: Arc<HostCertificate>,
+    pub vicarian_ss1: Arc<HostCertificate>,
+    pub vicarian_ss2: Arc<HostCertificate>,
     pub www_ss: Arc<HostCertificate>,
 }
 
@@ -43,21 +43,21 @@ impl TestCerts {
         let not_before = Utc::now().date_naive();
         let not_after = not_before.clone().checked_add_days(Days::new(365)).unwrap();
 
-        let host = "proxeny.example.com";
+        let host = "vicarian.example.com";
         let name = "snakeoil-1";
 
-        let proxeny_ss1 = gen_cert(host, name, true, not_before, not_after)?;
+        let vicarian_ss1 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "snakeoil-2";
         let not_after = not_before.clone().checked_add_days(Days::new(720)).unwrap();
-        let proxeny_ss2 = gen_cert(host, name, true, not_before, not_after)?;
+        let vicarian_ss2 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "www.example.com";
         let www_ss = gen_cert(name, name, false, not_before, not_after)?;
 
         Ok(Self {
-            proxeny_ss1,
-            proxeny_ss2,
+            vicarian_ss1,
+            vicarian_ss2,
             www_ss,
         })
     }
@@ -100,9 +100,9 @@ static TEST_CERTS: LazyLock<TestCerts> = LazyLock::new(|| TestCerts::new().unwra
 
 #[test]
 fn test_cn_host_valid_cn() -> Result<()> {
-    let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd, CN=proxeny.example.com".to_string();
+    let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd, CN=vicarian.example.com".to_string();
     let host = cn_host(cn_string)?;
-    assert_eq!(host, "proxeny.example.com");
+    assert_eq!(host, "vicarian.example.com");
     Ok(())
 }
 
@@ -133,7 +133,7 @@ fn test_cn_host_cn_with_spaces() -> Result<()> {
 
 #[test]
 fn test_load_certs_valid_pair() -> Result<()> {
-    let so = &TEST_CERTS.proxeny_ss1;
+    let so = &TEST_CERTS.vicarian_ss1;
     let result = load_certs(&so.keyfile, &so.certfile);
     assert!(result.is_ok());
 
@@ -148,15 +148,15 @@ fn test_load_certs_valid_pair() -> Result<()> {
 
 #[test]
 fn test_load_certs_invalid_pair() -> Result<()> {
-    let so1 = TEST_CERTS.proxeny_ss1.clone();
-    let so2 = TEST_CERTS.proxeny_ss2.clone();
+    let so1 = TEST_CERTS.vicarian_ss1.clone();
+    let so2 = TEST_CERTS.vicarian_ss2.clone();
     let key_path = &so1.keyfile;
     let other_cert_path = &so2.certfile;
 
     let result = load_certs(key_path, other_cert_path);
     assert!(result.is_err());
-    let err: ProxenyError = result.unwrap_err().downcast()?;
-    assert!(matches!(err, ProxenyError::CertificateMismatch(_, _)));
+    let err: VicarianError = result.unwrap_err().downcast()?;
+    assert!(matches!(err, VicarianError::CertificateMismatch(_, _)));
 
     Ok(())
 }
@@ -176,7 +176,7 @@ fn test_load_certs_empty_cert_file() -> Result<()> {
     empty_cert_file.write_all(b"")?;
     let empty_cert_path = Utf8PathBuf::from(empty_cert_file.path().to_str().unwrap());
 
-    let so1 = TEST_CERTS.proxeny_ss1.clone();
+    let so1 = TEST_CERTS.vicarian_ss1.clone();
 
     let result = load_certs(&so1.keyfile, &empty_cert_path);
     assert!(result.is_err());
@@ -195,7 +195,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
 
     let context = Arc::new(RunContext::new(crate::config::Config::empty()));
 
-    let so1 = TEST_CERTS.proxeny_ss1.clone();
+    let so1 = TEST_CERTS.vicarian_ss1.clone();
     fs::copy(&so1.keyfile, &key_path)?;
     fs::copy(&so1.certfile, &cert_path)?;
 
@@ -219,7 +219,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
 
     // Update the files
     println!("Updating cert files");
-    let so2 = TEST_CERTS.proxeny_ss2.clone();
+    let so2 = TEST_CERTS.vicarian_ss2.clone();
     fs::copy(&so2.keyfile, &key_path)?;
     fs::copy(&so2.certfile, &cert_path)?;
 
@@ -241,7 +241,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
 
 #[test]
 fn test_by_host() {
-    let cert = TEST_CERTS.proxeny_ss1.clone();
+    let cert = TEST_CERTS.vicarian_ss1.clone();
     let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
     let store = CertStore::new(certs, context).unwrap();
@@ -252,7 +252,7 @@ fn test_by_host() {
 
 #[test]
 fn test_by_file() {
-    let cert = TEST_CERTS.proxeny_ss1.clone();
+    let cert = TEST_CERTS.vicarian_ss1.clone();
     let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
     let store = CertStore::new(certs, context).unwrap();
@@ -263,7 +263,7 @@ fn test_by_file() {
 
 #[test]
 fn test_watchlist() -> Result<()> {
-    let hc1 = TEST_CERTS.proxeny_ss1.clone();
+    let hc1 = TEST_CERTS.vicarian_ss1.clone();
     let hc2 = TEST_CERTS.www_ss.clone();
 
     let context = Arc::new(RunContext::new(Config::empty()));
@@ -283,7 +283,7 @@ fn test_file_update_success() -> Result<()> {
     let temp_dir = tempdir()?;
     let key_path = temp_dir.path().join("test.key");
     let cert_path = temp_dir.path().join("test.crt");
-    let cert = TEST_CERTS.proxeny_ss1.clone();
+    let cert = TEST_CERTS.vicarian_ss1.clone();
     fs::copy(&cert.keyfile, &key_path)?;
     fs::copy(&cert.certfile, &cert_path)?;
 
@@ -295,10 +295,10 @@ fn test_file_update_success() -> Result<()> {
 
     // The original cert is snakeoil
     let first_cert = store.by_host(&original_host).unwrap();
-    assert!(first_cert.certs[0].subject_name().print_ex(0).unwrap().contains("proxeny.example.com"));
+    assert!(first_cert.certs[0].subject_name().print_ex(0).unwrap().contains("vicarian.example.com"));
 
     // Now update the files to snakeoil-2
-    let cert = TEST_CERTS.proxeny_ss2.clone();
+    let cert = TEST_CERTS.vicarian_ss2.clone();
     fs::copy(&cert.keyfile, &key_path)?;
     fs::copy(&cert.certfile, &cert_path)?;
     let newcert = Arc::new(HostCertificate::from(&first_cert)?);

@@ -8,7 +8,7 @@ use tracing_log::log::info;
 
 #[derive(Clone, Debug, Parser)]
 #[command(
-    name = "proxeny",
+    name = "vicarian",
     about = "A reverse proxy.",
     version,
 )]
@@ -32,7 +32,7 @@ impl CliOptions {
     }
 }
 
-pub const DEFAULT_CONFIG_FILE: &str = "/etc/proxeny/proxeny.corn";
+pub const DEFAULT_CONFIG_FILE: &str = "/etc/vicarian/vicarian.corn";
 
 fn deserialize_canonical<'de, D>(deserializer: D) -> std::result::Result<Utf8PathBuf, D::Error>
 where
@@ -81,7 +81,7 @@ pub struct TlsAcmeConfig {
     pub acme_provider: AcmeProvider,
     pub challenge_type: AcmeChallenge,
     // FIXME: Need a method to default Utf8PathBuf here.
-    #[serde_inline_default("/var/lib/proxeny/acme".to_string())]
+    #[serde_inline_default("/var/lib/vicarian/acme".to_string())]
     pub directory: String,
     pub contact: String,
 }
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_simple_example_config() -> Result<()> {
-        let file = Utf8PathBuf::from("examples/proxeny.corn");
+        let file = Utf8PathBuf::from("examples/vicarian.corn");
         let config = Config::from_file(&file)?;
         assert_eq!("files.example.com", config.hostname);
 
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_acme_example_config() -> Result<()> {
-        let file = Utf8PathBuf::from("examples/proxeny-dns01.corn");
+        let file = Utf8PathBuf::from("examples/vicarian-dns01.corn");
         let config = Config::from_file(&file)?;
         assert_eq!("files.example.com", config.hostname);
 

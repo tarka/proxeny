@@ -87,13 +87,13 @@ impl ServeHttp for TlsRedirector {
 
 
 
-pub struct Proxeny {
+pub struct Vicarian {
     context: Arc<RunContext>,
     certstore: Arc<CertStore>,
     routes_by_host: papaya::HashMap<String, Router>,
 }
 
-impl Proxeny {
+impl Vicarian {
     pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
         let routes_by_host: papaya::HashMap<String, Router> = context.config.servers().iter()
             .map(|s| (s.hostname.clone(),
@@ -108,7 +108,7 @@ impl Proxeny {
 }
 
 #[async_trait]
-impl ProxyHttp for Proxeny {
+impl ProxyHttp for Vicarian {
     type CTX = ();
 
     fn new_ctx(&self) -> () {

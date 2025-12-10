@@ -16,7 +16,7 @@ use crate::{
         store::CertStore
     },
     proxy::services::{
-        Proxeny,
+        Vicarian,
         TlsRedirector
     }, RunContext
 };
@@ -31,11 +31,11 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> 
     // TODO: Currently single-server; support vhosts here in the future?
 
     let tls_proxy = {
-        let proxeny = Proxeny::new(certstore.clone(), context.clone());
+        let vicarian = Vicarian::new(certstore.clone(), context.clone());
 
         let mut pingora_proxy = pingora_proxy::http_proxy_service(
             &pingora_server.configuration,
-            proxeny);
+            vicarian);
 
         let cert_handler = CertHandler::new(certstore.clone());
         let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;

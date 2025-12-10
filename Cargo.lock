@@ -2555,51 +2555,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
-name = "proxeny"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "boring",
- "camino",
- "chrono",
- "clap 4.5.53",
- "ctor",
- "dnsclient",
- "futures",
- "http",
- "http-serde",
- "instant-acme",
- "itertools 0.14.0",
- "libcorn",
- "nix 0.30.1",
- "notify",
- "notify-debouncer-full",
- "papaya",
- "path-tree",
- "pem",
- "pingora-boringssl",
- "pingora-core",
- "pingora-http",
- "pingora-proxy",
- "procfs",
- "reqwest",
- "rustls",
- "serde",
- "serde_default_utils",
- "tempfile",
- "test-context",
- "test-log",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "tracing-log",
- "tracing-subscriber",
- "zone-update",
-]
-
-[[package]]
 name = "quinn"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3808,6 +3763,51 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vicarian"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "boring",
+ "camino",
+ "chrono",
+ "clap 4.5.53",
+ "ctor",
+ "dnsclient",
+ "futures",
+ "http",
+ "http-serde",
+ "instant-acme",
+ "itertools 0.14.0",
+ "libcorn",
+ "nix 0.30.1",
+ "notify",
+ "notify-debouncer-full",
+ "papaya",
+ "path-tree",
+ "pem",
+ "pingora-boringssl",
+ "pingora-core",
+ "pingora-http",
+ "pingora-proxy",
+ "procfs",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_default_utils",
+ "tempfile",
+ "test-context",
+ "test-log",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+ "zone-update",
+]
 
 [[package]]
 name = "walkdir"

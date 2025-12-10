@@ -97,13 +97,13 @@ fn main() -> Result<()> {
         })
     };
 
-    info!("Starting Proxeny");
+    info!("Starting Vicarian");
     proxy::run_indefinitely(certstore, context.clone())?;
 
     context.quit()?;
     cert_handle.join()
         .expect("Failed to finalise certificate management tasks")?;
 
-    info!("Proxeny finished.");
+    info!("Vicarian finished.");
     Ok(())
 }

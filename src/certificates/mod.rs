@@ -22,7 +22,7 @@ use pingora_boringssl::{
 };
 use tracing_log::log::info;
 
-use crate::{certificates::{acme::AcmeRuntime, store::CertStore, watcher::CertWatcher}, errors::ProxenyError, RunContext};
+use crate::{certificates::{acme::AcmeRuntime, store::CertStore, watcher::CertWatcher}, errors::VicarianError, RunContext};
 
 #[derive(Debug)]
 pub struct HostCertificate {
@@ -138,7 +138,7 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
     // Verify that the private key and cert match
     let cert_pubkey = certs[0].public_key()?;
     if !key.public_eq(&cert_pubkey) {
-        let err = ProxenyError::CertificateMismatch(
+        let err = VicarianError::CertificateMismatch(
             keyfile.to_path_buf(),
             certfile.to_path_buf())
             .into();

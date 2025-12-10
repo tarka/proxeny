@@ -22,11 +22,11 @@ const PROXY_TLS_PORT: u16 = 8443;
 pub fn run_proxy() -> &'static Child {
     PROXY.get_or_init(|| {
         info!("Starting Test Proxy");
-        let exe = env!("CARGO_BIN_EXE_proxeny");
+        let exe = env!("CARGO_BIN_EXE_vicarian");
 
         let child = Command::new(exe)
             .arg("-vv")
-            .arg("-c").arg("proxeny.corn")
+            .arg("-c").arg("vicarian.corn")
             .spawn()
             .expect("Failed to start proxy");
 

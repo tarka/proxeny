@@ -55,8 +55,8 @@ impl AcmeRuntime {
             })
             .map(|aconf| {
                 // Default;
-                // keyfile  -> /var/lib/proxeny/acme/www.example.com/www.example.com.key
-                // certfile -> /var/lib/proxeny/acme/www.example.com/www.example.com.crt
+                // keyfile  -> /var/lib/vicarian/acme/www.example.com/www.example.com.key
+                // certfile -> /var/lib/vicarian/acme/www.example.com/www.example.com.crt
                 let host = context.config.hostname.clone();
 
                 let cert_base = Utf8PathBuf::from(aconf.directory.clone());

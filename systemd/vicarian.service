@@ -1,5 +1,5 @@
 [Unit]
-Description=Proxeny HTTP Proxy Server
+Description=Vicarian HTTP Proxy Server
 After=network-online.target
 Wants=network-online.target systemd-networkd-wait-online.service
 
@@ -9,17 +9,17 @@ Restart=on-abnormal
 User=www-data
 Group=www-data
 
-EnvironmentFile=-/etc/default/proxeny
+EnvironmentFile=-/etc/default/vicarian
 
-ExecStart=/opt/proxeny/proxeny -v \
-              --config=/etc/proxeny/proxeny.corn
+ExecStart=/opt/vicarian/vicarian -v \
+              --config=/etc/vicarian/vicarian.corn
 
 ; Use graceful shutdown with a reasonable timeout
 KillMode=mixed
 KillSignal=SIGINT
 TimeoutStopSec=5s
 
-StateDirectory=proxeny
+StateDirectory=vicarian
 
 PrivateTmp=true
 PrivateDevices=false

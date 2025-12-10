@@ -8,7 +8,7 @@ use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEve
 use tokio::sync::mpsc;
 use tracing_log::log::{debug, info, warn};
 
-use crate::{certificates::{store::CertStore, HostCertificate}, errors::ProxenyError, RunContext};
+use crate::{certificates::{store::CertStore, HostCertificate}, errors::VicarianError, RunContext};
 
 
 pub const RELOAD_GRACE: Duration = Duration::from_millis(1500);
@@ -110,10 +110,10 @@ impl CertWatcher {
                 match HostCertificate::from(existing) {
                     Ok(hc) => Some(Ok(Arc::new(hc))),
                     Err(err) => {
-                        if err.is::<ProxenyError>() {
-                            let perr = err.downcast::<ProxenyError>()
-                                .expect("Error downcasting ProxenyError after check; this shouldn't happen");
-                            if matches!(perr, ProxenyError::CertificateMismatch(_, _)) {
+                        if err.is::<VicarianError>() {
+                            let perr = err.downcast::<VicarianError>()
+                                .expect("Error downcasting VicarianError after check; this shouldn't happen");
+                            if matches!(perr, VicarianError::CertificateMismatch(_, _)) {
                                 warn!("Possible error on reload: {perr}. This may be transient.");
                                 None
                             } else {
