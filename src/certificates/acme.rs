@@ -30,7 +30,7 @@ struct AcmeHost {
 pub struct AcmeRuntime {
     context: Arc<RunContext>,
     certstore: Arc<CertStore>,
-    hosts: Vec<AcmeHost>,
+    acme_hosts: Vec<AcmeHost>,
 }
 
 struct PemCertificate {
@@ -86,14 +86,14 @@ impl AcmeRuntime {
         Ok(Self {
             context,
             certstore,
-            hosts: acme_hosts,
+            acme_hosts,
         })
     }
 
     pub async fn run(&self) -> Result<()> {
         info!("Starting ACME runtime");
 
-        let existing = self.hosts.iter()
+        let existing = self.acme_hosts.iter()
             .filter(|ah| ah.keyfile.exists() && ah.certfile.exists())
             .map(|ah| Ok(Arc::new(HostCertificate::new(ah.keyfile.clone(), ah.certfile.clone(), false)?)))
             .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
@@ -152,7 +152,7 @@ impl AcmeRuntime {
     }
 
     fn next_expiring_secs(&self) -> Option<u64> {
-        self.hosts.iter()
+        self.acme_hosts.iter()
             // TODO: This currently just skips missing hosts.
             .filter_map(|ah| self.certstore.by_host(&ah.hostname))
             .map(|hc| hc.expires_in())
@@ -215,7 +215,7 @@ impl AcmeRuntime {
 
     /// Returns certs that need creating or refreshing
     fn pending(&self) -> Vec<&AcmeHost> {
-        self.hosts.iter()
+        self.acme_hosts.iter()
         // Either None or expiring with 30 days.
         // TODO: This could use renewal_info() in instant-acme.
             .filter(|ah| ! self.certstore.by_host(&ah.hostname)
