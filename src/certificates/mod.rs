@@ -46,7 +46,7 @@ impl HostCertificate {
 
         let host = cn_host(certs[0].subject_name().print_ex(0)
                          .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
-        info!("Certificate found: {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
+        info!("Loaded certificate {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
 
         let not_after = certs[0].not_after();
         let expires = asn1time_to_datetime(not_after)?;

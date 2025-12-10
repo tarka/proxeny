@@ -2,6 +2,7 @@ use std::{fs::create_dir_all, net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
+use chrono::Utc;
 use dnsclient::{r#async::DNSClient, UpstreamServer};
 use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
 use itertools::Itertools;
@@ -104,6 +105,38 @@ impl AcmeRuntime {
             self.certstore.upsert(cert)?;
         }
 
+        self.renew_all_pending().await?;
+
+        let mut quit_rx = self.context.quit_rx.clone();
+        loop {
+
+            let next = self.next_expiring_secs()
+                .map(|s| tokio::time::Duration::from_secs(s));
+            if let Some(d) = next {
+                let dt = Utc::now() + d;
+                info!("Wait for next expiry at {dt}");
+            } else {
+                // TODO: Should we just quit?
+                info!("Nothing expiring, just hanging for now");
+            }
+
+            tokio::select! {
+                _ = tokio::time::sleep(next.unwrap()), if next.is_some() => {
+                    info!("Woken up for ACME renewal; processing all pending certs");
+                    self.renew_all_pending().await?;
+                }
+
+                _ = quit_rx.changed() => {
+                    info!("Quitting ACME runtime");
+                    break;
+                },
+            };
+        }
+
+        Ok(())
+    }
+
+    async fn renew_all_pending(&self) -> Result<()> {
         for ahost in self.pending() {
             info!("ACME host {} requires renewal, initiating...", ahost.hostname);
             match ahost.challenge_type {
@@ -115,38 +148,17 @@ impl AcmeRuntime {
                 }
             }
         }
-
-        let mut quit_rx = self.context.quit_rx.clone();
-        loop {
-            tokio::select! {
-                // events = self.ev_rx.recv() => {
-                //     match events {
-                //         Some(Err(errs)) => warn!("Received errors from cert watcher: {errs:#?}"),
-                //         Some(Ok(evs)) => self.process_events(evs)?,
-                //         None => {
-                //             warn!("Notify watcher channel closed; quitting");
-                //             break;
-                //         }
-                //     }
-                // },
-                _ = quit_rx.changed() => {
-                    info!("Quitting ACME runtime");
-                    break;
-                },
-            };
-        }
-
         Ok(())
     }
 
-    async fn next_expiring_secs(&self) -> Option<i64> {
+    fn next_expiring_secs(&self) -> Option<u64> {
         self.hosts.iter()
             // TODO: This currently just skips missing hosts.
             .filter_map(|ah| self.certstore.by_host(&ah.hostname))
             .map(|hc| hc.expires_in())
             .sorted()
             .next()
-            .map(|s| s.max(0))
+            .map(|s| s.max(0) as u64)
     }
 
     async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<Arc<HostCertificate>> {
