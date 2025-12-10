@@ -1,10 +1,10 @@
 pub mod acme;
 pub mod external;
 pub mod handler;
-#[cfg(test)]
-mod tests;
 pub mod store;
 pub mod watcher;
+#[cfg(test)]
+mod tests;
 
 use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 
