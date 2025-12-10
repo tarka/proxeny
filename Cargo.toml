@@ -27,9 +27,9 @@ notify-debouncer-full = { version = "0.6.0", default-features = false, features 
 papaya = "0.2.3"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_default_utils = { version = "0.3.1", features = ["inline"] }
-tracing = "0.1.41"
+tracing = "0.1.43"
 tracing-log = "0.2.0"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 pingora-core = { version = "0.6.0", features = ["boringssl"] }
 pingora-http = "0.6.0"
 pingora-proxy = "0.6.0"
@@ -55,14 +55,14 @@ dead_code = "allow"
 
 [dev-dependencies]
 axum = "0.8.7"
-ctor = "0.6.1"
+ctor = "0.6.3"
 nix = { version = "0.30.1", features = ["process", "signal", "term"] }
 pem = "3.0.6"
 procfs = "0.18.0"
-reqwest = { version = "0.12.24", features = ["blocking", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12.25", features = ["blocking", "rustls-tls"], default-features = false }
 tempfile = "3.23.0"
 test-context = "0.5.4"
-test-log = { version = "0.2.18", features = ["trace"] }
+test-log = { version = "0.2.19", features = ["trace"] }
 tokio = { version = "1.48.0", features = ["fs"] }
 
 [package.metadata.bacon]
