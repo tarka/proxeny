@@ -4,12 +4,15 @@ use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
 use dnsclient::{r#async::DNSClient, UpstreamServer};
 use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
+use itertools::Itertools;
 use tokio::fs;
 use tracing_log::log::{debug, error, info, warn};
 use zone_update::async_impl::AsyncDnsProvider;
 
 use crate::{
-    certificates::{store::CertStore, HostCertificate}, config::{AcmeChallenge, AcmeProvider, DnsProvider, TlsConfigType}, RunContext
+    RunContext,
+    certificates::{HostCertificate, store::CertStore},
+    config::{AcmeChallenge, AcmeProvider, DnsProvider, TlsConfigType},
 };
 
 const EXPIRY_WINDOW: i64 = 30;
@@ -136,14 +139,17 @@ impl AcmeRuntime {
         Ok(())
     }
 
-    async fn renew_cert(&self, host: &AcmeHost) -> Result<()> {
-        match host.challenge_type {
-            AcmeChallenge::Dns01(ref provider) => self.renew_dns01(host, &provider).await,
-            AcmeChallenge::Http01 => self.renew_http01(host).await,
-        }
+    async fn next_expiring_secs(&self) -> Option<i64> {
+        self.hosts.iter()
+            // TODO: This currently just skips missing hosts.
+            .filter_map(|ah| self.certstore.by_host(&ah.hostname))
+            .map(|hc| hc.expires_in())
+            .sorted()
+            .next()
+            .map(|s| s.max(0))
     }
 
-    async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<()> {
+    async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<Arc<HostCertificate>> {
         let contact = format!("mailto:{}", acme_host.contact);
         let shortname = acme_host.hostname
             .strip_suffix(&format!(".{}", provider.domain))
@@ -186,19 +192,20 @@ impl AcmeRuntime {
 
         info!("Loading new certificate");
         let hc = Arc::new(HostCertificate::new(acme_host.keyfile.clone(), acme_host.certfile.clone(), false)?);
-        self.certstore.upsert(hc)?;
+        self.certstore.upsert(hc.clone())?;
 
-        Ok(())
+        Ok(hc)
     }
 
-    async fn renew_http01(&self, _host: &AcmeHost) -> Result<()> {
+    async fn renew_http01(&self, _host: &AcmeHost) -> Result<Arc<HostCertificate>> {
         todo!()
     }
 
     /// Returns certs that need creating or refreshing
     fn pending(&self) -> Vec<&AcmeHost> {
         self.hosts.iter()
-            // Either None or expiring with 30 days
+        // Either None or expiring with 30 days.
+        // TODO: This could use renewal_info() in instant-acme.
             .filter(|ah| ! self.certstore.by_host(&ah.hostname)
                     .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW)))
             .collect()
@@ -207,7 +214,6 @@ impl AcmeRuntime {
 }
 
 async fn renew_instant_acme(params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
-
     info!("Initialising ACME account");
     let (account, _credentials) = Account::builder()?
         .create(
@@ -216,7 +222,7 @@ async fn renew_instant_acme(params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDn
                 terms_of_service_agreed: true,
                 only_return_existing: false,
             },
-            LetsEncrypt::Production.url().to_owned(),
+            LetsEncrypt::Staging.url().to_owned(),
             None,
         )
         .await?;

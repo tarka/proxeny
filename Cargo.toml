@@ -31,7 +31,7 @@ chrono = { version = "0.4.42", default-features = false, features = ["now"] }
 futures = "0.3.31"
 boring = "4.19.0"
 dnsclient = "0.2.0"
-instant-acme = "0.8.4"
+instant-acme = { version = "0.8.4", features = ["time"] }
 rustls = "0.23.35"
 zone-update = { version = "0.5.3", features = ["async"] }
 
