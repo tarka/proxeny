@@ -3,7 +3,7 @@
 Vicarian is a reverse proxy server with built-in ACME support. It is currently
 targeted at self-hosting and SOHO installations; in particular it supports
 provisioning TLS certificates behind-the-firewall via ACME DNS-01 and the
-[zone-update](https://github.com/tarka/zone-update/).
+[zone-update](https://github.com/tarka/zone-update/) library.
 
 ## Project Status
 
@@ -16,8 +16,8 @@ warranty is expressed or implied.
 
 ### Current features
 
-- **Reverse Proxy**: Efficiently route traffic to multiple backend services
-  based on URL contexts
+- **Reverse Proxy**: Route traffic to multiple backend services based on URL
+  contexts
 - **Dynamic Certificate Loading**: Externally provided TLS certificates are
   monitored and reloaded on update.
 - **ACME Support**: Automatic certificate issuance and renewal via ACME
