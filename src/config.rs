@@ -136,6 +136,8 @@ pub struct Config {
     pub insecure: Option<Insecure>,
     pub tls: TlsConfig,
     pub backends: Vec<Backend>,
+    #[serde(default = "default_bool::<false>")]
+    pub dev_mode: bool,
 }
 
 pub type Server = Config;
@@ -169,6 +171,7 @@ impl Config {
                 }),
             },
             backends: Vec::new(),
+            dev_mode: true,
         }
     }
 }

@@ -183,7 +183,7 @@ impl AcmeRuntime {
         };
         let dns_client = provider.dns_provider.async_impl(dns_config);
 
-        let certificate_r = renew_instant_acme(params, &dns_client).await;
+        let certificate_r = self.renew_instant_acme(params, &dns_client).await;
 
         // Cleanup before evaluating certificate for errors
         attempt_dns_cleanup(txt_name, dns_client).await;
@@ -223,61 +223,67 @@ impl AcmeRuntime {
             .collect()
     }
 
-}
 
-async fn renew_instant_acme(params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
-    info!("Initialising ACME account");
-    let (account, _credentials) = Account::builder()?
-        .create(
-            &instant_acme::NewAccount {
-                contact: &[params.contact],
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            LetsEncrypt::Staging.url().to_owned(),
-            None,
-        )
-        .await?;
-    info!("Create order for {}", params.hostname);
-    let hid = Identifier::Dns(params.hostname.clone());
-    let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
-    let mut authz = order.authorizations();
-    let mut auth = authz.next().await
-        .ok_or(anyhow!("No authorisation found for {} in order", params.hostname))??;
-    info!("Processing {:?}", auth.status);
-    match auth.status {
-        AuthorizationStatus::Pending => {}
-        // It's technically possibly to pick up an old auth order here
-        // which returns ::Valid?
-        _ => todo!(),
+    async fn renew_instant_acme(&self, params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
+        info!("Initialising ACME account");
+        let acme_url = if self.context.config.dev_mode {
+            info!("Using staging ACME server");
+            LetsEncrypt::Staging.url().to_owned()
+        } else {
+            LetsEncrypt::Production.url().to_owned()
+        };
+        let (account, _credentials) = Account::builder()?
+            .create(
+                &instant_acme::NewAccount {
+                    contact: &[params.contact],
+                    terms_of_service_agreed: true,
+                    only_return_existing: false,
+                },
+                acme_url,
+                None,
+            )
+            .await?;
+        info!("Create order for {}", params.hostname);
+        let hid = Identifier::Dns(params.hostname.clone());
+        let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
+        let mut authz = order.authorizations();
+        let mut auth = authz.next().await
+            .ok_or(anyhow!("No authorisation found for {} in order", params.hostname))??;
+        info!("Processing {:?}", auth.status);
+        match auth.status {
+            AuthorizationStatus::Pending => {}
+            // It's technically possibly to pick up an old auth order here
+            // which returns ::Valid?
+            _ => todo!(),
+        }
+        info!("Creating challenge");
+        let mut challenge = auth
+            .challenge(ChallengeType::Dns01)
+            .ok_or_else(|| anyhow::anyhow!("No DNS-01 challenge found"))?;
+        let token = challenge.key_authorization().dns_value();
+        info!("Creating TXT: {} -> {}", params.txt_name, token);
+        dns_client.create_txt_record(params.txt_name, &token).await?;
+
+        wait_for_dns(params.txt_fqdn).await?;
+
+        info!("Setting challenge to ready");
+        challenge.set_ready().await?;
+
+        info!("Polling challenge status");
+        let status = order.poll_ready(&RetryPolicy::default()).await?;
+        if status != OrderStatus::Ready {
+            dns_client.delete_txt_record(params.txt_name).await?;
+            return Err(anyhow!("Unexpected order status: {status:?}"));
+        }
+
+        let private_key = order.finalize().await?;
+        let cert_chain = order.poll_certificate(&RetryPolicy::default()).await?;
+
+        Ok(PemCertificate {
+            cert_chain,
+            private_key,
+        })
     }
-    info!("Creating challenge");
-    let mut challenge = auth
-        .challenge(ChallengeType::Dns01)
-        .ok_or_else(|| anyhow::anyhow!("No DNS-01 challenge found"))?;
-    let token = challenge.key_authorization().dns_value();
-    info!("Creating TXT: {} -> {}", params.txt_name, token);
-    dns_client.create_txt_record(params.txt_name, &token).await?;
-
-    wait_for_dns(params.txt_fqdn).await?;
-
-    info!("Setting challenge to ready");
-    challenge.set_ready().await?;
-
-    info!("Polling challenge status");
-    let status = order.poll_ready(&RetryPolicy::default()).await?;
-    if status != OrderStatus::Ready {
-        dns_client.delete_txt_record(params.txt_name).await?;
-        return Err(anyhow!("Unexpected order status: {status:?}"));
-    }
-
-    let private_key = order.finalize().await?;
-    let cert_chain = order.poll_certificate(&RetryPolicy::default()).await?;
-
-    Ok(PemCertificate {
-        cert_chain,
-        private_key,
-    })
 }
 
 async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
