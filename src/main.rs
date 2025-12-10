@@ -13,9 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{
-        CertificateProvider, external::ExternalProvider, store::CertStore,
-    },
+    certificates::{external::ExternalProvider, store::CertStore},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -68,18 +66,16 @@ fn main() -> Result<()> {
         .unwrap_or(Utf8PathBuf::from(DEFAULT_CONFIG_FILE));
     let config = Config::from_file(&config_file)?;
 
+    rustls::crypto::aws_lc_rs::default_provider().install_default()
+        .expect("Failed to install Rustls crypto provider");
+
     let context = Arc::new(RunContext::new(config));
 
-    let providers = vec![
-        ExternalProvider::new(context.clone())?,
-    ];
-    let certs = providers.iter()
-        .map(|cp| cp.read_certs())
-        .flatten()
-        .collect();
+    let ext_provider = ExternalProvider::new(context.clone())?;
+    // Alternatively have ExternalProvider inject certs ala acme?
+    let certs = ext_provider.read_certs();
 
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
-
 
     ///// Runtime start
 
@@ -88,7 +84,9 @@ fn main() -> Result<()> {
         let context = context.clone();
         thread::spawn(move || -> Result<()> {
             info!("Starting Certificate Management runtime");
-            let cert_runtime = tokio::runtime::Builder::new_current_thread()
+            let cert_runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_time()
+                .enable_io()
                 .build()?;
 
             cert_runtime.block_on(

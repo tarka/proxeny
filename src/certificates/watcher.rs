@@ -6,7 +6,7 @@ use itertools::Itertools;
 use notify::{EventKind, RecursiveMode};
 use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEvent};
 use tokio::sync::mpsc;
-use tracing_log::log::{info, warn};
+use tracing_log::log::{debug, info, warn};
 
 use crate::{certificates::{store::CertStore, HostCertificate}, errors::ProxenyError, RunContext};
 
@@ -31,7 +31,7 @@ impl CertWatcher {
     }
 
     pub async fn watch(&mut self) -> Result<()> {
-        info!("Starting cert watcher");
+        info!("Starting certificate watcher runtime");
 
         let handler = {
             let ev_tx = self.ev_tx.clone();
@@ -58,7 +58,7 @@ impl CertWatcher {
                     }
                 },
                 _ = quit_rx.changed() => {
-                    info!("Quitting certificate watcher loop.");
+                    info!("Quitting certificate watcher runtime");
                     break;
                 },
             };
@@ -90,6 +90,7 @@ impl CertWatcher {
     }
 
     fn process_paths(&self, paths: Vec<Utf8PathBuf>) -> Result<()> {
+        debug!("Processing updated paths: {paths:#?}");
         let certs = paths.iter()
             .map(|path| {
                 let cert = self.certstore.by_file(path)
@@ -102,10 +103,10 @@ impl CertWatcher {
             .iter()
             .unique()
             .filter_map(|existing| {
-                // Attempt to reload the relevant
-                // HostCertificate. However as this can be expected
-                // while the certs are being replaced externally we
-                // just warn and pass for now.
+                // Attempt to reload the relevant HostCertificate.
+                // However as errors can be expected while the certs
+                // are being replaced externally we just warn and pass
+                // for now.
                 match HostCertificate::from(existing) {
                     Ok(hc) => Some(Ok(Arc::new(hc))),
                     Err(err) => {

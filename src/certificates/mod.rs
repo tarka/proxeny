@@ -1,16 +1,20 @@
 pub mod acme;
 pub mod external;
 pub mod handler;
+#[cfg(test)]
+mod tests;
 pub mod store;
 pub mod watcher;
 
-#[cfg(test)]
-mod tests;
-
 use std::{fs, hash::{Hash, Hasher}, sync::Arc};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
+use boring::asn1::{Asn1Time, Asn1TimeRef};
+//use boring::asn1::{Asn1Time, Asn1TimeRef};
 use camino::{Utf8Path, Utf8PathBuf};
+use chrono::{DateTime, Duration, Utc};
+
+use futures::future::try_join_all;
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
     pkey::{PKey, Private},
@@ -18,7 +22,7 @@ use pingora_boringssl::{
 };
 use tracing_log::log::info;
 
-use crate::{certificates::{store::CertStore, watcher::CertWatcher}, errors::ProxenyError, RunContext};
+use crate::{certificates::{acme::AcmeRuntime, store::CertStore, watcher::CertWatcher}, errors::ProxenyError, RunContext};
 
 #[derive(Debug)]
 pub struct HostCertificate {
@@ -27,6 +31,7 @@ pub struct HostCertificate {
     key: PKey<Private>,
     certfile: Utf8PathBuf,
     certs: Vec<X509>,
+    expires: DateTime<Utc>,
     watch: bool,
 }
 
@@ -41,7 +46,10 @@ impl HostCertificate {
 
         let host = cn_host(certs[0].subject_name().print_ex(0)
                          .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
-        info!("Certificate found: {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
+        info!("Loaded certificate {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
+
+        let not_after = certs[0].not_after();
+        let expires = asn1time_to_datetime(not_after)?;
 
         Ok(HostCertificate {
             host,
@@ -49,6 +57,7 @@ impl HostCertificate {
             key,
             certfile,
             certs,
+            expires,
             watch,
         })
     }
@@ -59,6 +68,34 @@ impl HostCertificate {
         HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
     }
 
+
+    pub fn expires(&self) -> &DateTime<Utc> {
+        &self.expires
+    }
+
+    pub fn expires_in(&self) -> i64 {
+        let now = Utc::now();
+        let diff = self.expires - now;
+        diff.num_seconds()
+    }
+
+    pub fn is_expiring_in(&self, days: i64) -> bool {
+        let in_days = Utc::now() + Duration::days(days);
+        in_days >= self.expires
+    }
+}
+
+fn asn1time_to_datetime(not_after: &Asn1TimeRef) -> Result<DateTime<Utc>> {
+    let epoch = Asn1Time::from_unix(0)?;
+    let time_diff = not_after.diff(&epoch)?; // Returns -(expected_value)
+
+    // Calculate total seconds and convert to positive
+    let total_seconds = -((time_diff.days as i64 * 86400) + time_diff.secs as i64);
+
+    let datetime = DateTime::<Utc>::from_timestamp(total_seconds as i64, 0)
+        .ok_or(anyhow!("Failed to create DateTime from timestamp"))?;
+
+    Ok(datetime)
 }
 
 impl PartialEq<HostCertificate> for HostCertificate {
@@ -112,14 +149,19 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
 }
 
 
-pub trait CertificateProvider {
-    fn read_certs(&self) -> Vec<Arc<HostCertificate>>;
-}
-
 pub async fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<()> {
+
+    let acme = AcmeRuntime::new(certstore.clone(), context.clone())?;
+    let acme_handle = tokio::spawn(async move {
+        acme.run().await
+    });
+
     let mut certwatcher = CertWatcher::new(certstore.clone(), context.clone());
-    let watcher_handle = tokio::spawn(async move { certwatcher.watch().await });
-    watcher_handle.await??;
+    let watcher_handle = tokio::spawn(async move {
+        certwatcher.watch().await
+    });
+
+    try_join_all(vec![acme_handle, watcher_handle]).await?;
 
     Ok(())
 }
