@@ -1,7 +1,17 @@
 [package]
 name = "vicarian"
+description = "Vicarian is a reverse proxy server with ACME support"
 version = "0.1.0"
 edition = "2024"
+
+authors = ["Steve Smith <tarkasteve@gmail.com>"]
+homepage = "https://github.com/tarka/vicarian"
+repository = "https://github.com/tarka/vicarian"
+readme = "README.md"
+
+keywords = ["proxy", "https", "reverse-proxy", "pingora"]
+categories = ["web-programming::http-server", "network-programming"]
+license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.100"
