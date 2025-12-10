@@ -13,7 +13,7 @@ use pingora_core::{
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info};
 
-use crate::{RunContext, certificates::store::CertStore, proxy::router::Router};
+use crate::{certificates::store::CertStore, proxy::{rewrite_port, router::Router, strip_port}, RunContext};
 
 pub struct TlsRedirector {
     port: String,
@@ -28,31 +28,6 @@ impl TlsRedirector {
 }
 
 const REDIRECT_BODY: &[u8] = "<html><body>301 Moved Permanently</body></html>".as_bytes();
-
-
-fn rewrite_port(host: &str, newport: &str) -> String {
-    let port_i = if let Some(i) = host.rfind(':') {
-        i
-    } else {
-        return host.to_string();
-    };
-    if !host[port_i + 1..].parse::<u16>().is_ok() {
-        // Not an int, assume not port ':'
-        return host.to_string();
-    }
-    let host_only = &host[0..port_i];
-
-    format!("{host_only}:{newport}")
-}
-
-fn strip_port(host_header: &str) -> String {
-    if let Some(i) = host_header.rfind(':') {
-        host_header[0..i].to_string()
-    } else {
-        host_header.to_string()
-    }
-}
-
 
 #[async_trait]
 impl ServeHttp for TlsRedirector {
@@ -141,51 +116,4 @@ impl ProxyHttp for Vicarian {
         let peer = HttpPeer::new((host, port), tls, host.to_string());
         Ok(Box::new(peer))
     }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use anyhow::Result;
-    use http::{uri::Builder, Uri};
-    use test_log::test;
-
-    #[test]
-    fn test_uri_rewrite() -> Result<()> {
-        let uri = Uri::from_static("http://example.com/a/path?param=value");
-        let changed = Builder::from(uri)
-            .scheme("https")
-            .build()?;
-        assert_eq!("https://example.com/a/path?param=value", changed.to_string());
-        Ok(())
-    }
-
-    #[test]
-    fn test_host_port_rewrite() -> Result<()> {
-        let replaced = rewrite_port("example.com:8080", "8443");
-        assert_eq!("example.com:8443", replaced);
-        let replaced = rewrite_port("example.com", "8443");
-        assert_eq!("example.com", replaced);
-        Ok(())
-    }
-
-    #[test]
-    fn test_port_strip() -> Result<()> {
-        let host_header = "example.com:8443";
-        let host = strip_port(host_header);
-        assert_eq!("example.com", host);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_no_port_strip() -> Result<()> {
-        let host_header = "example.com";
-        let host = strip_port(host_header);
-        assert_eq!("example.com", host);
-
-        Ok(())
-    }
-
 }

@@ -1,5 +1,7 @@
 mod router;
 mod services;
+#[cfg(test)]
+mod tests;
 
 use std::sync::Arc;
 
@@ -60,4 +62,27 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> 
     pingora_server.run(pingora_core::server::RunArgs::default());
 
     Ok(())
+}
+
+fn rewrite_port(host: &str, newport: &str) -> String {
+    let port_i = if let Some(i) = host.rfind(':') {
+        i
+    } else {
+        return host.to_string();
+    };
+    if !host[port_i + 1..].parse::<u16>().is_ok() {
+        // Not an int, assume not port ':'
+        return host.to_string();
+    }
+    let host_only = &host[0..port_i];
+
+    format!("{host_only}:{newport}")
+}
+
+fn strip_port(host_header: &str) -> String {
+    if let Some(i) = host_header.rfind(':') {
+        host_header[0..i].to_string()
+    } else {
+        host_header.to_string()
+    }
 }
