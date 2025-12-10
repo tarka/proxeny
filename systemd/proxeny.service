@@ -11,7 +11,7 @@ Group=www-data
 
 EnvironmentFile=-/etc/default/proxeny
 
-ExecStart=/opt/proxeny/proxeny run \
+ExecStart=/opt/proxeny/proxeny -v \
               --config=/etc/proxeny/proxeny.corn
 
 ; Use graceful shutdown with a reasonable timeout
