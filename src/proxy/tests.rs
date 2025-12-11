@@ -67,39 +67,39 @@ fn test_router() -> Result<()> {
 
     let matched = router.lookup("/").unwrap();
     assert_eq!(Uri::from_static("http://localhost:1010"), matched.backend.url);
-    assert_eq!("", matched.path);
+    assert_eq!("", matched._path);
 
     let matched = router.lookup("/base/path").unwrap();
     assert_eq!(Uri::from_static("http://localhost:1010"), matched.backend.url);
-    assert_eq!("base/path", matched.path);
+    assert_eq!("base/path", matched._path);
 
     let matched = router.lookup("/service").unwrap();
     assert_eq!(Uri::from_static("http://localhost:2020"), matched.backend.url);
-    assert_eq!("", matched.path);
+    assert_eq!("", matched._path);
 
     let matched = router.lookup("/service/").unwrap();
     assert_eq!(Uri::from_static("http://localhost:2020"), matched.backend.url);
-    assert_eq!("/", matched.path);
+    assert_eq!("/", matched._path);
 
     let matched = router.lookup("/service/some/path").unwrap();
     assert_eq!(Uri::from_static("http://localhost:2020"), matched.backend.url);
-    assert_eq!("/some/path", matched.path);
+    assert_eq!("/some/path", matched._path);
 
     let matched = router.lookup("/service/subservice").unwrap();
     assert_eq!(Uri::from_static("http://localhost:3030"), matched.backend.url);
-    assert_eq!("", matched.path);
+    assert_eq!("", matched._path);
 
     let matched = router.lookup("/service/subservice/").unwrap();
     assert_eq!(Uri::from_static("http://localhost:3030"), matched.backend.url);
-    assert_eq!("/", matched.path);
+    assert_eq!("/", matched._path);
 
     let matched = router.lookup("/service/subservice/ss/path").unwrap();
     assert_eq!(Uri::from_static("http://localhost:3030"), matched.backend.url);
-    assert_eq!("/ss/path", matched.path);
+    assert_eq!("/ss/path", matched._path);
 
     let matched = router.lookup("/other_service/some/path").unwrap();
     assert_eq!(Uri::from_static("http://localhost:4040"), matched.backend.url);
-    assert_eq!("/some/path", matched.path);
+    assert_eq!("/some/path", matched._path);
 
     Ok(())
 }

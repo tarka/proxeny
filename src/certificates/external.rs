@@ -21,7 +21,7 @@ fn uri_host(uri: &String) -> Result<String> {
 /// Externally managed certificates
 // TODO: Need a better name
 pub struct ExternalProvider {
-    context: Arc<RunContext>,
+    _context: Arc<RunContext>,
     certs: Vec<Arc<HostCertificate>>,
 }
 
@@ -52,7 +52,7 @@ impl ExternalProvider {
             .collect::<Result<Vec<Arc<HostCertificate>>>>()?;
 
         Ok(Self {
-            context,
+            _context: context,
             certs,
         })
     }

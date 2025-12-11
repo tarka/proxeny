@@ -65,7 +65,7 @@ impl Default for AcmeProvider {
 #[derive(Clone, Debug, Deserialize)]
 pub struct DnsProvider {
     pub domain: String,
-    pub dns_provider: zone_update::Providers,
+    pub dns_provider: zone_update::Provider,
 }
 
 #[derive(Clone, Debug, Deserialize)]

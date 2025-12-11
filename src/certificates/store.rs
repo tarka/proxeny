@@ -19,14 +19,14 @@ use crate::{
 // here, which would enforce the store as being the source of
 // truth. But a bit fiddly for MVP version.
 pub struct CertStore {
-    context: Arc<RunContext>,
+    _context: Arc<RunContext>,
     by_host: papaya::HashMap<String, Arc<HostCertificate>>,
     by_file: papaya::HashMap<Utf8PathBuf, Arc<HostCertificate>>,
 }
 
 impl CertStore {
 
-    pub fn new(certs: Vec<Arc<HostCertificate>>, context: Arc<RunContext>) -> Result<Self> {
+    pub fn new(certs: Vec<Arc<HostCertificate>>, _context: Arc<RunContext>) -> Result<Self> {
         info!("Loading host certificates");
 
         let by_host = certs.iter()
@@ -44,7 +44,7 @@ impl CertStore {
         info!("Loaded {} certificates", certs.len());
 
         let certstore = Self {
-            context,
+            _context,
             by_host,
             by_file,
         };

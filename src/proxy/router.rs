@@ -5,7 +5,7 @@ use crate::config::Backend;
 
 pub struct Match<'a> {
     pub backend: &'a Backend,
-    pub path: String,
+    pub _path: String,
 }
 
 #[derive(Debug)]
@@ -50,7 +50,7 @@ impl Router {
         let rest = matched.params()[0].1.to_string();
         Some(Match {
             backend,
-            path: rest,
+            _path: rest,
         })
     }
 }

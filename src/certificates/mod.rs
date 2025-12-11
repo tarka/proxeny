@@ -68,11 +68,6 @@ impl HostCertificate {
         HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
     }
 
-
-    pub fn expires(&self) -> &DateTime<Utc> {
-        &self.expires
-    }
-
     pub fn expires_in(&self) -> i64 {
         let now = Utc::now();
         let diff = self.expires - now;

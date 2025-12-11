@@ -34,7 +34,7 @@ fn test_acme_example_config() -> Result<()> {
             directory: _,
             challenge_type: AcmeChallenge::Dns01(DnsProvider {
                 domain: _,
-                dns_provider: zone_update::Providers::PorkBun(_)
+                dns_provider: zone_update::Provider::PorkBun(_)
             }),
 
         })));

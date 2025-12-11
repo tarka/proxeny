@@ -63,20 +63,20 @@ impl ServeHttp for TlsRedirector {
 
 
 pub struct Vicarian {
-    context: Arc<RunContext>,
-    certstore: Arc<CertStore>,
+    _context: Arc<RunContext>,
+    _certstore: Arc<CertStore>,
     routes_by_host: papaya::HashMap<String, Router>,
 }
 
 impl Vicarian {
-    pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
+    pub fn new(_certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
         let routes_by_host: papaya::HashMap<String, Router> = context.config.servers().iter()
             .map(|s| (s.hostname.clone(),
                       Router::new(&s.backends)))
             .collect();
         Self {
-            context,
-            certstore,
+            _context: context,
+            _certstore,
             routes_by_host,
         }
     }

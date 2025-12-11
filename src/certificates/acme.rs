@@ -8,12 +8,12 @@ use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, Lets
 use itertools::Itertools;
 use tokio::fs;
 use tracing_log::log::{debug, error, info, warn};
-use zone_update::async_impl::AsyncDnsProvider;
+use zone_update::{async_impl::{AsyncDnsProvider, AsyncDnsProviderImpl}};
 
 use crate::{
     RunContext,
     certificates::{HostCertificate, store::CertStore},
-    config::{AcmeChallenge, AcmeProvider, DnsProvider, TlsConfigType},
+    config::{AcmeChallenge, DnsProvider, TlsConfigType},
 };
 
 const EXPIRY_WINDOW: i64 = 30;
@@ -23,7 +23,6 @@ struct AcmeHost {
     contact: String,
     keyfile: Utf8PathBuf,
     certfile: Utf8PathBuf,
-    acme_provider: AcmeProvider,
     challenge_type: AcmeChallenge,
 }
 
@@ -75,7 +74,6 @@ impl AcmeRuntime {
                     hostname: host,
                     keyfile,
                     certfile,
-                    acme_provider: aconf.acme_provider,
                     challenge_type: aconf.challenge_type.clone(),
                     contact: aconf.contact.clone(),
                 };
@@ -181,12 +179,14 @@ impl AcmeRuntime {
             domain: provider.domain.clone(),
             dry_run: false,
         };
-        let dns_client = provider.dns_provider.async_impl(dns_config);
+
+        //let dns_client = provider.dns_provider.async_impl(dns_config);
+        let dns_client = AsyncDnsProviderImpl::new(&provider.dns_provider, dns_config);
 
         let certificate_r = self.renew_instant_acme(params, &dns_client).await;
 
         // Cleanup before evaluating certificate for errors
-        attempt_dns_cleanup(txt_name, dns_client).await;
+        attempt_dns_cleanup(txt_name, &dns_client).await;
 
         let pem_certificate = match certificate_r {
             Ok(cert) => cert,
@@ -224,7 +224,7 @@ impl AcmeRuntime {
     }
 
 
-    async fn renew_instant_acme(&self, params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
+    async fn renew_instant_acme(&self, params: AcmeParams<'_>, dns_client: &AsyncDnsProviderImpl) -> Result<PemCertificate> {
         info!("Initialising ACME account");
         let acme_url = if self.context.config.dev_mode {
             info!("Using staging ACME server");
@@ -308,7 +308,7 @@ async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
     Err(anyhow!("Failed to find record {txt_fqdn} in public DNS"))
 }
 
-async fn attempt_dns_cleanup(txt_name: String, dns_client: Box<dyn AsyncDnsProvider>) {
+async fn attempt_dns_cleanup(txt_name: String, dns_client: &AsyncDnsProviderImpl) {
     info!("Attempting cleanup of {txt_name} record");
     // FIXME: Doesn't handle multiple records currently. We need to
     // add this to zone-update.
