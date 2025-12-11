@@ -4413,9 +4413,9 @@ dependencies = [
 
 [[package]]
 name = "zone-update"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f551c02bfe4f08f53938326975d56d334be8914e3310c22bf12c84d23fc38769"
+checksum = "7d7516618c83a73dcd44d65b416866871cce5c9eda2204d4dbca69ef436a9596"
 dependencies = [
  "async-trait",
  "blocking",
