@@ -43,7 +43,7 @@ boring = "4.19.0"
 dnsclient = "0.2.0"
 instant-acme = { version = "0.8.4", features = ["time"] }
 rustls = "0.23.35"
-zone-update = { version = "0.7.0", features = ["async"] }
+zone-update = { version = "0.8.0", features = ["async"] }
 
 [features]
 integration_tests = []
