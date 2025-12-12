@@ -3798,6 +3798,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_default_utils",
+ "serde_json",
  "tempfile",
  "test-context",
  "test-log",

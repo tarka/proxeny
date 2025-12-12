@@ -4,9 +4,9 @@ use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
 use chrono::Utc;
 use dnsclient::{r#async::DNSClient, UpstreamServer};
-use instant_acme::{Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
+use instant_acme::{Account, AccountCredentials, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
 use itertools::Itertools;
-use tokio::fs;
+use tokio::{fs::{self, read_to_string, File}, io::AsyncWriteExt};
 use tracing_log::log::{debug, error, info, warn};
 use zone_update::{async_impl::AsyncDnsProvider};
 
@@ -21,6 +21,7 @@ const EXPIRY_WINDOW: i64 = 30;
 struct AcmeHost {
     hostname: String,
     contact: String,
+    contactfile: Utf8PathBuf,
     keyfile: Utf8PathBuf,
     certfile: Utf8PathBuf,
     challenge_type: AcmeChallenge,
@@ -38,10 +39,9 @@ struct PemCertificate {
 }
 
 struct AcmeParams<'a> {
-    hostname: &'a String,
+    acme_host: &'a AcmeHost,
     txt_name: &'a String,
     txt_fqdn: &'a String,
-    contact: &'a String,
 }
 
 impl AcmeRuntime {
@@ -49,7 +49,7 @@ impl AcmeRuntime {
     pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<Self> {
         let acme_hosts = context.config.servers().iter()
             .filter_map(|s| match &s.tls.config {
-                TlsConfigType::Files(_) => None,
+                TlsConfigType::Files(_) => None, // Handled elsewhere
                 TlsConfigType::Acme(aconf) => Some(aconf),
             })
             .map(|aconf| {
@@ -70,12 +70,23 @@ impl AcmeRuntime {
                 let keyfile = cert_file.with_extension("key");
                 let certfile = cert_file.with_extension("crt");
 
+                let contact = aconf.contact.clone();
+                let contact_dir = cert_base
+                    .join(&contact);
+                create_dir_all(&contact_dir)
+                    .context("Error creating directory {contact_dir}")?;
+
+                let contactfile = contact_dir
+                    .join(&contact)
+                    .with_extension("conf");
+
                 let acme_host = AcmeHost {
                     hostname: host,
                     keyfile,
                     certfile,
+                    contact,
+                    contactfile,
                     challenge_type: aconf.challenge_type.clone(),
-                    contact: aconf.contact.clone(),
                 };
                 Ok(acme_host)
             })
@@ -160,7 +171,6 @@ impl AcmeRuntime {
     }
 
     async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<Arc<HostCertificate>> {
-        let contact = format!("mailto:{}", acme_host.contact);
         let shortname = acme_host.hostname
             .strip_suffix(&format!(".{}", provider.domain))
             .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.hostname))?;
@@ -169,10 +179,9 @@ impl AcmeRuntime {
         let txt_fqdn = format!("{txt_name}.{}", provider.domain);
 
         let params = AcmeParams {
-            hostname: &acme_host.hostname,
+            acme_host: &acme_host,
             txt_name: &txt_name,
             txt_fqdn: &txt_fqdn,
-            contact: &contact,
         };
 
         let dns_config = zone_update::Config {
@@ -225,34 +234,20 @@ impl AcmeRuntime {
 
     async fn renew_instant_acme(&self, params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
         info!("Initialising ACME account");
-        let acme_url = if self.context.config.dev_mode {
-            info!("Using staging ACME server");
-            LetsEncrypt::Staging.url().to_owned()
-        } else {
-            LetsEncrypt::Production.url().to_owned()
-        };
-        let (account, _credentials) = Account::builder()?
-            .create(
-                &instant_acme::NewAccount {
-                    contact: &[params.contact],
-                    terms_of_service_agreed: true,
-                    only_return_existing: false,
-                },
-                acme_url,
-                None,
-            )
-            .await?;
-        info!("Create order for {}", params.hostname);
-        let hid = Identifier::Dns(params.hostname.clone());
+        let account = self.fetch_account(&params).await?;
+
+        info!("Create order for {}", params.acme_host.hostname);
+        let hid = Identifier::Dns(params.acme_host.hostname.clone());
         let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
         let mut authz = order.authorizations();
         let mut auth = authz.next().await
-            .ok_or(anyhow!("No authorisation found for {} in order", params.hostname))??;
+            .ok_or(anyhow!("No authorisation found for {} in order", params.acme_host.hostname))??;
         info!("Processing {:?}", auth.status);
         match auth.status {
             AuthorizationStatus::Pending => {}
             // It's technically possibly to pick up an old auth order here
             // which returns ::Valid?
+            AuthorizationStatus::Valid => {},
             _ => todo!(),
         }
         info!("Creating challenge");
@@ -283,6 +278,49 @@ impl AcmeRuntime {
             private_key,
         })
     }
+
+    async fn fetch_account(&self, params: &AcmeParams<'_>) -> Result<Account> {
+        let acme_url = if self.context.config.dev_mode {
+            info!("Using staging ACME server");
+            LetsEncrypt::Staging.url().to_owned()
+        } else {
+            LetsEncrypt::Production.url().to_owned()
+        };
+
+        let account = if params.acme_host.contactfile.exists() {
+            let creds_str = read_to_string(&params.acme_host.contactfile).await?;
+            let creds: AccountCredentials = serde_json::from_str(&creds_str)?;
+            let account = Account::builder()?
+                .from_credentials(creds).await?;
+            info!("Loaded account credentials for {}", params.acme_host.contact);
+
+            account
+
+        } else {
+            let contact_url = format!("mailto:{}", params.acme_host.contact);
+
+            let (account, credentials) = Account::builder()?
+                .create(
+                    &instant_acme::NewAccount {
+                        contact: &[&contact_url],
+                        terms_of_service_agreed: true,
+                        only_return_existing: false,
+                    },
+                    acme_url,
+                    None,
+                )
+                .await?;
+
+            info!("Saving account credentials for {}", params.acme_host.contact);
+            let creds_str = serde_json::to_vec(&credentials)?;
+            let mut fd = File::create(&params.acme_host.contactfile).await?;
+            fd.write_all(&creds_str).await?;
+
+            account
+        };
+        Ok(account)
+    }
+
 }
 
 async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
