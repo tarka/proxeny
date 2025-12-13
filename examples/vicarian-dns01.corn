@@ -21,10 +21,10 @@ let {
           acme = {
             acme_provider = "letsencrypt"
             contact = "admin@example.com"
+            domain = "example.com"
             directory = "/var/lib/my_rundir/acme"
             challenge_type = {
               type = "dns-01"
-              domain = "example.com"
               dns_provider = {
                 name = "porkbun"
                 key = $env_PORKBUN_KEY

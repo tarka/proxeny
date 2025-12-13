@@ -1,4 +1,3 @@
-
 use super::*;
 
 #[test]
@@ -33,7 +32,6 @@ fn test_acme_example_config() -> Result<()> {
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
             challenge_type: AcmeChallenge::Dns01(DnsProvider {
-                domain: _,
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
 

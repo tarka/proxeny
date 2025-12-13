@@ -19,7 +19,8 @@ use crate::{
 const EXPIRY_WINDOW: i64 = 30;
 
 struct AcmeHost {
-    hostname: String,
+    fqdn: String,
+    domain: String,
     contact: String,
     contactfile: Utf8PathBuf,
     keyfile: Utf8PathBuf,
@@ -56,17 +57,21 @@ impl AcmeRuntime {
                 // Default;
                 // keyfile  -> /var/lib/vicarian/acme/www.example.com/www.example.com.key
                 // certfile -> /var/lib/vicarian/acme/www.example.com/www.example.com.crt
-                let host = context.config.hostname.clone();
+                let fqdn = context.config.hostname.clone();
+
+                let domain_psl = psl::domain(fqdn.as_bytes())
+                    .ok_or(anyhow!("Failed to find base domain for {fqdn}"))?;
+                let domain = String::from_utf8(domain_psl.as_bytes().to_vec())?;
 
                 let cert_base = Utf8PathBuf::from(aconf.directory.clone());
                 let cert_dir = cert_base
-                    .join(&host);
+                    .join(&fqdn);
                 info!("Creating ACME certificate dir {cert_base}");
                 create_dir_all(&cert_dir)
                     .context("Error creating directory {cert_base}")?;
 
                 let cert_file = cert_dir
-                    .join(&host);
+                    .join(&fqdn);
                 let keyfile = cert_file.with_extension("key");
                 let certfile = cert_file.with_extension("crt");
 
@@ -81,7 +86,8 @@ impl AcmeRuntime {
                     .with_extension("conf");
 
                 let acme_host = AcmeHost {
-                    hostname: host,
+                    fqdn,
+                    domain,
                     keyfile,
                     certfile,
                     contact,
@@ -147,7 +153,7 @@ impl AcmeRuntime {
 
     async fn renew_all_pending(&self) -> Result<()> {
         for ahost in self.pending() {
-            info!("ACME host {} requires renewal, initiating...", ahost.hostname);
+            info!("ACME host {} requires renewal, initiating...", ahost.fqdn);
             match ahost.challenge_type {
                 AcmeChallenge::Dns01(ref provider) => {
                     self.renew_dns01(&ahost, provider).await?;
@@ -163,7 +169,7 @@ impl AcmeRuntime {
     fn next_expiring_secs(&self) -> Option<u64> {
         self.acme_hosts.iter()
             // TODO: This currently just skips missing hosts.
-            .filter_map(|ah| self.certstore.by_host(&ah.hostname))
+            .filter_map(|ah| self.certstore.by_host(&ah.fqdn))
             .map(|hc| hc.expires_in())
             .sorted()
             .next()
@@ -171,12 +177,12 @@ impl AcmeRuntime {
     }
 
     async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<Arc<HostCertificate>> {
-        let shortname = acme_host.hostname
-            .strip_suffix(&format!(".{}", provider.domain))
-            .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.hostname))?;
+        let shortname = acme_host.fqdn
+            .strip_suffix(&format!(".{}", acme_host.domain))
+            .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.fqdn))?;
 
         let txt_name = format!("_acme-challenge.{}", shortname);
-        let txt_fqdn = format!("{txt_name}.{}", provider.domain);
+        let txt_fqdn = format!("{txt_name}.{}", acme_host.domain);
 
         let params = AcmeParams {
             acme_host: &acme_host,
@@ -185,7 +191,7 @@ impl AcmeRuntime {
         };
 
         let dns_config = zone_update::Config {
-            domain: provider.domain.clone(),
+            domain: acme_host.domain.clone(),
             dry_run: false,
         };
 
@@ -226,7 +232,7 @@ impl AcmeRuntime {
         self.acme_hosts.iter()
         // Either None or expiring with 30 days.
         // TODO: This could use renewal_info() in instant-acme.
-            .filter(|ah| ! self.certstore.by_host(&ah.hostname)
+            .filter(|ah| ! self.certstore.by_host(&ah.fqdn)
                     .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW)))
             .collect()
     }
@@ -236,12 +242,12 @@ impl AcmeRuntime {
         info!("Initialising ACME account");
         let account = self.fetch_account(&params).await?;
 
-        info!("Create order for {}", params.acme_host.hostname);
-        let hid = Identifier::Dns(params.acme_host.hostname.clone());
+        info!("Create order for {}", params.acme_host.fqdn);
+        let hid = Identifier::Dns(params.acme_host.fqdn.clone());
         let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
         let mut authz = order.authorizations();
         let mut auth = authz.next().await
-            .ok_or(anyhow!("No authorisation found for {} in order", params.acme_host.hostname))??;
+            .ok_or(anyhow!("No authorisation found for {} in order", params.acme_host.fqdn))??;
         info!("Processing {:?}", auth.status);
         match auth.status {
             AuthorizationStatus::Pending => {}

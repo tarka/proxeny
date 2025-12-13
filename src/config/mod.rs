@@ -64,7 +64,6 @@ impl Default for AcmeProvider {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct DnsProvider {
-    pub domain: String,
     pub dns_provider: zone_update::Provider,
 }
 
@@ -83,7 +82,7 @@ pub struct TlsAcmeConfig {
     #[serde(default)]
     pub acme_provider: AcmeProvider,
     pub challenge_type: AcmeChallenge,
-    // FIXME: Need a method to default Utf8PathBuf here.
+    // TODO: Need a method to default Utf8PathBuf here.
     #[serde_inline_default("/var/lib/vicarian/acme".to_string())]
     pub directory: String,
     pub contact: String,
@@ -133,6 +132,8 @@ pub struct Insecure {
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
+    /// This should the FQDN, especially if using ACME as it is used
+    /// to calculate the domain.
     pub hostname: String,
     #[serde_inline_default("[::]".to_string())]
     pub listen: String,
