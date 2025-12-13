@@ -341,8 +341,8 @@ impl AcmeRuntime {
 
                 info!("Storing HTTP-01 challenge: {} -> {:?}", params.acme_host.fqdn, tokens);
                 let pin = self.challenges.pin();
-                pin.insert(params.acme_host.fqdn.clone(), tokens)
-                    .ok_or(anyhow!("Failed to insert challenge {}", params.acme_host.fqdn))?;
+                pin.insert(params.acme_host.fqdn.clone(), tokens);
+
             }
         }
         Ok(())
