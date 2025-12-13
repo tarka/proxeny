@@ -110,6 +110,7 @@ impl ServeHttp for CleartextHandler {
         if let Some(pq) = path_p
             && pq.path().starts_with(ACME_HTTP01_PREFIX)
         {
+            info!("Received ACME challenge request: {pq}");
             self.acme_challenge(session).await
         } else {
             self.redirect_to_tls(session).await

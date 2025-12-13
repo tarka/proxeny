@@ -1,8 +1,8 @@
 use super::*;
 
 #[test]
-fn test_simple_example_config() -> Result<()> {
-    let file = Utf8PathBuf::from("examples/vicarian.corn");
+fn test_tls_files_example_config() -> Result<()> {
+    let file = Utf8PathBuf::from("examples/vicarian-tls-files.corn");
     let config = Config::from_file(&file)?;
     assert_eq!("files.example.com", config.hostname);
 
@@ -20,7 +20,7 @@ fn test_simple_example_config() -> Result<()> {
 }
 
 #[test]
-fn test_acme_example_config() -> Result<()> {
+fn test_dns01_example_config() -> Result<()> {
     let file = Utf8PathBuf::from("examples/vicarian-dns01.corn");
     let config = Config::from_file(&file)?;
     assert_eq!("files.example.com", config.hostname);
@@ -34,6 +34,27 @@ fn test_acme_example_config() -> Result<()> {
             challenge_type: AcmeChallenge::Dns01(DnsProvider {
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
+
+        })));
+
+    assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
+
+    Ok(())
+}
+
+#[test]
+fn test_http01_example_config() -> Result<()> {
+    let file = Utf8PathBuf::from("examples/vicarian-http01.corn");
+    let config = Config::from_file(&file)?;
+    assert_eq!("www.example.com", config.hostname);
+
+    assert_eq!(8443, config.tls.port);
+    assert!(matches!(&config.tls.config, TlsConfigType::Acme(
+        TlsAcmeConfig {
+            contact: _,
+            acme_provider: AcmeProvider::LetsEncrypt,
+            directory: _,
+            challenge_type: AcmeChallenge::Http01,
 
         })));
 
