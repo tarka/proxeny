@@ -50,11 +50,6 @@ psl = "2.1.168"
 [features]
 integration_tests = []
 
-[lints.rust]
-# FIXME: For early dev, remove before release
-# dead_code = "allow"
-#unused = "allow"
-
 [dev-dependencies]
 axum = "0.8.7"
 ctor = "0.6.3"
@@ -68,6 +63,5 @@ test-log = { version = "0.2.19", features = ["trace"] }
 tokio = { version = "1.48.0", features = ["fs"] }
 
 [package.metadata.bacon]
-# For dev
 apply_gitignore = false
 watch = ["vicarian.corn"]

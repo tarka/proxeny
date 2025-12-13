@@ -1,14 +1,20 @@
 use std::{fs::create_dir_all, net::SocketAddr, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use camino::Utf8PathBuf;
 use chrono::Utc;
-use dnsclient::{r#async::DNSClient, UpstreamServer};
-use instant_acme::{Account, AccountCredentials, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewOrder, OrderStatus, RetryPolicy};
+use dnsclient::{UpstreamServer, r#async::DNSClient};
+use instant_acme::{
+    Account, AccountCredentials, AuthorizationStatus, ChallengeHandle, ChallengeType, Identifier,
+    LetsEncrypt, NewOrder, OrderStatus, RetryPolicy,
+};
 use itertools::Itertools;
-use tokio::{fs::{self, read_to_string, File}, io::AsyncWriteExt};
+use tokio::{
+    fs::{self, File, read_to_string},
+    io::AsyncWriteExt,
+};
 use tracing_log::log::{debug, error, info, warn};
-use zone_update::{async_impl::AsyncDnsProvider};
+use zone_update::async_impl::AsyncDnsProvider;
 
 use crate::{
     RunContext,
@@ -154,14 +160,7 @@ impl AcmeRuntime {
     async fn renew_all_pending(&self) -> Result<()> {
         for ahost in self.pending() {
             info!("ACME host {} requires renewal, initiating...", ahost.fqdn);
-            match ahost.challenge_type {
-                AcmeChallenge::Dns01(ref provider) => {
-                    self.renew_dns01(&ahost, provider).await?;
-                }
-                AcmeChallenge::Http01 => {
-                    self.renew_http01(&ahost).await?;
-                }
-            }
+            self.renew_acme(&ahost).await?;
         }
         Ok(())
     }
@@ -176,7 +175,7 @@ impl AcmeRuntime {
             .map(|s| s.max(0) as u64)
     }
 
-    async fn renew_dns01(&self, acme_host: &AcmeHost, provider: &DnsProvider) -> Result<Arc<HostCertificate>> {
+    async fn renew_acme(&self, acme_host: &AcmeHost) -> Result<Arc<HostCertificate>> {
         let shortname = acme_host.fqdn
             .strip_suffix(&format!(".{}", acme_host.domain))
             .ok_or(anyhow!("Failed to strip domain from host {}", acme_host.fqdn))?;
@@ -190,17 +189,11 @@ impl AcmeRuntime {
             txt_fqdn: &txt_fqdn,
         };
 
-        let dns_config = zone_update::Config {
-            domain: acme_host.domain.clone(),
-            dry_run: false,
-        };
 
-        let dns_client = provider.dns_provider.async_impl(dns_config);
-
-        let certificate_r = self.renew_instant_acme(params, &dns_client).await;
+        let certificate_r = self.renew_instant_acme(&params).await;
 
         // Cleanup before evaluating certificate for errors
-        attempt_dns_cleanup(txt_name, &dns_client).await;
+        self.cleanup_provisioning(&params).await;
 
         let pem_certificate = match certificate_r {
             Ok(cert) => cert,
@@ -223,9 +216,6 @@ impl AcmeRuntime {
         Ok(hc)
     }
 
-    async fn renew_http01(&self, _host: &AcmeHost) -> Result<Arc<HostCertificate>> {
-        todo!()
-    }
 
     /// Returns certs that need creating or refreshing
     fn pending(&self) -> Vec<&AcmeHost> {
@@ -238,7 +228,7 @@ impl AcmeRuntime {
     }
 
 
-    async fn renew_instant_acme(&self, params: AcmeParams<'_>, dns_client: &Box<dyn AsyncDnsProvider>) -> Result<PemCertificate> {
+    async fn renew_instant_acme(&self, params: &AcmeParams<'_>) -> Result<PemCertificate> {
         info!("Initialising ACME account");
         let account = self.fetch_account(&params).await?;
 
@@ -256,15 +246,13 @@ impl AcmeRuntime {
             AuthorizationStatus::Valid => {},
             _ => todo!(),
         }
+
         info!("Creating challenge");
         let mut challenge = auth
-            .challenge(ChallengeType::Dns01)
-            .ok_or_else(|| anyhow::anyhow!("No DNS-01 challenge found"))?;
-        let token = challenge.key_authorization().dns_value();
-        info!("Creating TXT: {} -> {}", params.txt_name, token);
-        dns_client.create_txt_record(params.txt_name, &token).await?;
+            .challenge(ChallengeType::from(&params.acme_host.challenge_type))
+            .ok_or_else(|| anyhow!("No {:?} challenge found", params.acme_host.challenge_type))?;
 
-        wait_for_dns(params.txt_fqdn).await?;
+        self.provision_challenge(&params, &challenge).await?;
 
         info!("Setting challenge to ready");
         challenge.set_ready().await?;
@@ -272,7 +260,7 @@ impl AcmeRuntime {
         info!("Polling challenge status");
         let status = order.poll_ready(&RetryPolicy::default()).await?;
         if status != OrderStatus::Ready {
-            dns_client.delete_txt_record(params.txt_name).await?;
+            // Will cleanup on return
             return Err(anyhow!("Unexpected order status: {status:?}"));
         }
 
@@ -327,9 +315,66 @@ impl AcmeRuntime {
         Ok(account)
     }
 
+    async fn provision_challenge(&self, params: &AcmeParams<'_>, challenge: &ChallengeHandle<'_>) -> Result<()> {
+        match &params.acme_host.challenge_type {
+            AcmeChallenge::Dns01(provider) => {
+                let dns_client = get_dns_client(params, provider);
+
+                let token = challenge.key_authorization().dns_value();
+                info!("Creating TXT: {} -> {}", params.txt_name, token);
+                dns_client.create_txt_record(params.txt_name, &token).await?;
+                wait_for_dns(params.txt_fqdn).await?;
+            }
+            AcmeChallenge::Http01 => {
+                todo!()
+            }
+        }
+        Ok(())
+    }
+
+    async fn cleanup_provisioning(&self, params: &AcmeParams<'_>) {
+        match &params.acme_host.challenge_type {
+            AcmeChallenge::Dns01(provider) => {
+                let dns_client = get_dns_client(params, provider);
+                let txt_name = params.txt_name;
+
+                info!("Attempting cleanup of {txt_name} record");
+                // FIXME: Doesn't handle multiple records currently. We need to
+                // add this to zone-update.
+                match dns_client.delete_txt_record(&txt_name).await {
+                    Ok(_) => {},
+                    Err(d_err) => {
+                        warn!("Failed to delete DNS record {txt_name}: {d_err}");
+                    }
+                }
+            }
+            AcmeChallenge::Http01 => {
+                todo!()
+            }
+        }
+    }
+
 }
 
-async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
+fn get_dns_client(params: &AcmeParams<'_>, provider: &DnsProvider) -> Box<dyn AsyncDnsProvider> {
+    // It's slightly inefficient to create this each time, but it simplifies the code.
+    let dns_config = zone_update::Config {
+        domain: params.acme_host.domain.clone(),
+        dry_run: false,
+    };
+    provider.dns_provider.async_impl(dns_config)
+}
+
+impl From<&AcmeChallenge> for ChallengeType {
+    fn from(value: &AcmeChallenge) -> Self {
+        match value {
+            AcmeChallenge::Dns01(_) => ChallengeType::Dns01,
+            AcmeChallenge::Http01 => ChallengeType::Http01,
+        }
+    }
+}
+
+async fn wait_for_dns(txt_fqdn: &String) -> Result<()> {
     info!("Waiting for record {txt_fqdn} to go live");
 
     // TODO: For now we use a 'known good' DNS server for now to avoid
@@ -351,14 +396,3 @@ async fn wait_for_dns(txt_fqdn: &String) -> Result<(), anyhow::Error> {
     Err(anyhow!("Failed to find record {txt_fqdn} in public DNS"))
 }
 
-async fn attempt_dns_cleanup(txt_name: String, dns_client: &Box<dyn AsyncDnsProvider>) {
-    info!("Attempting cleanup of {txt_name} record");
-    // FIXME: Doesn't handle multiple records currently. We need to
-    // add this to zone-update.
-    match dns_client.delete_txt_record(&txt_name).await {
-        Ok(_) => {},
-        Err(d_err) => {
-            warn!("Failed to delete DNS record {txt_name}: {d_err}");
-        }
-    }
-}
