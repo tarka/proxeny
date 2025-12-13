@@ -38,6 +38,7 @@ pub struct AcmeRuntime {
     context: Arc<RunContext>,
     certstore: Arc<CertStore>,
     acme_hosts: Vec<AcmeHost>,
+    challenges: papaya::HashMap<String, ChallengeTokens>,
 }
 
 struct PemCertificate {
@@ -49,6 +50,12 @@ struct AcmeParams<'a> {
     acme_host: &'a AcmeHost,
     txt_name: &'a String,
     txt_fqdn: &'a String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ChallengeTokens {
+    pub token: String,
+    pub key_auth: String,
 }
 
 impl AcmeRuntime {
@@ -108,6 +115,7 @@ impl AcmeRuntime {
             context,
             certstore,
             acme_hosts,
+            challenges: papaya::HashMap::new(),
         })
     }
 
@@ -326,7 +334,15 @@ impl AcmeRuntime {
                 wait_for_dns(params.txt_fqdn).await?;
             }
             AcmeChallenge::Http01 => {
-                todo!()
+                let tokens = ChallengeTokens {
+                    token: challenge.token.clone(),
+                    key_auth: challenge.key_authorization().as_str().to_string(),
+                };
+
+                info!("Storing HTTP-01 challenge: {} -> {:?}", params.acme_host.fqdn, tokens);
+                let pin = self.challenges.pin();
+                pin.insert(params.acme_host.fqdn.clone(), tokens)
+                    .ok_or(anyhow!("Failed to insert challenge {}", params.acme_host.fqdn))?;
             }
         }
         Ok(())
@@ -349,9 +365,20 @@ impl AcmeRuntime {
                 }
             }
             AcmeChallenge::Http01 => {
-                todo!()
+                info!("Removing HTTP-01 challenge: {}", params.acme_host.fqdn);
+                let pin = self.challenges.pin();
+                let opt = pin.remove(&params.acme_host.fqdn);
+                if opt.is_none() {
+                    warn!("Challenge for {} not found", params.acme_host.fqdn);
+                }
+
             }
         }
+    }
+
+    pub fn challenge_tokens(&self, fqdn: &str) -> Option<ChallengeTokens> {
+        let pin = self.challenges.pin();
+        pin.get(fqdn).cloned()
     }
 
 }

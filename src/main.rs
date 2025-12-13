@@ -13,7 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_log::log::info;
 
 use crate::{
-    certificates::{external::ExternalProvider, store::CertStore},
+    certificates::{acme::AcmeRuntime, external::ExternalProvider, store::CertStore},
     config::{Config, DEFAULT_CONFIG_FILE},
 };
 
@@ -72,16 +72,20 @@ fn main() -> Result<()> {
     let context = Arc::new(RunContext::new(config));
 
     let ext_provider = ExternalProvider::new(context.clone())?;
+
     // Alternatively have ExternalProvider inject certs ala acme?
     let certs = ext_provider.read_certs();
-
     let certstore = Arc::new(CertStore::new(certs, context.clone())?);
+
+    let acme = Arc::new(AcmeRuntime::new(certstore.clone(), context.clone())?);
 
     ///// Runtime start
 
     let cert_handle = {
         let certstore = certstore.clone();
         let context = context.clone();
+        let acme = acme.clone();
+
         thread::spawn(move || -> Result<()> {
             info!("Starting Certificate Management runtime");
             let cert_runtime = tokio::runtime::Builder::new_multi_thread()
@@ -90,7 +94,7 @@ fn main() -> Result<()> {
                 .build()?;
 
             cert_runtime.block_on(
-                certificates::run_indefinitely(certstore, context)
+                certificates::run_indefinitely(certstore, acme, context)
             )?;
 
             Ok(())
@@ -98,7 +102,7 @@ fn main() -> Result<()> {
     };
 
     info!("Starting Vicarian");
-    proxy::run_indefinitely(certstore, context.clone())?;
+    proxy::run_indefinitely(certstore, acme, context.clone())?;
 
     context.quit()?;
     cert_handle.join()

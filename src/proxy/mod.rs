@@ -14,17 +14,15 @@ use tracing::info;
 
 use crate::{
     certificates::{
-        handler::CertHandler,
-        store::CertStore
+        acme::AcmeRuntime, handler::CertHandler, store::CertStore
     },
     proxy::services::{
-        Vicarian,
-        TlsRedirector
+        CleartextHandler, Vicarian
     }, RunContext
 };
 
 
-pub fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> anyhow::Result<()> {
+pub fn run_indefinitely(certstore: Arc<CertStore>, acme: Arc<AcmeRuntime>, context: Arc<RunContext>) -> anyhow::Result<()> {
     info!("Starting Proxy");
 
     let mut pingora_server = PingoraServer::new(None)?;
@@ -53,7 +51,7 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> 
     if let Some(insecure) = &context.config.insecure
         && insecure.redirect
     {
-        let redirector = TlsRedirector::new(context.config.tls.port);
+        let redirector = CleartextHandler::new(acme, context.config.tls.port);
         let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
         let addr = format!("{}:{}", context.config.listen, insecure.port);
         service.add_tcp(&addr);

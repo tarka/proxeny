@@ -144,9 +144,7 @@ fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>,
 }
 
 
-pub async fn run_indefinitely(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<()> {
-
-    let acme = AcmeRuntime::new(certstore.clone(), context.clone())?;
+pub async fn run_indefinitely(certstore: Arc<CertStore>, acme: Arc<AcmeRuntime>, context: Arc<RunContext>) -> Result<()> {
     let acme_handle = tokio::spawn(async move {
         acme.run().await
     });

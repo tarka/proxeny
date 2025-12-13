@@ -13,36 +13,41 @@ use pingora_core::{
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info};
 
-use crate::{certificates::store::CertStore, proxy::{rewrite_port, router::Router, strip_port}, RunContext};
+use crate::{certificates::{acme::AcmeRuntime, store::CertStore}, proxy::{rewrite_port, router::Router, strip_port}, RunContext};
 
-pub struct TlsRedirector {
+const REDIRECT_BODY: &[u8] = "<html><body>301 Moved Permanently</body></html>".as_bytes();
+const TOKEN_NOT_FOUND: &[u8] = "<html><body>ACME token not found in request path</body></html>".as_bytes();
+const ACME_HTTP01_PREFIX: &'static str = "/.well-known/acme-challenge/";
+
+pub struct CleartextHandler {
+    acme: Arc<AcmeRuntime>,
     port: String,
 }
 
-impl TlsRedirector {
-    pub fn new(port: u16) -> Self {
+impl CleartextHandler {
+    pub fn new(acme: Arc<AcmeRuntime>, tls_port: u16) -> Self {
         Self {
-            port: port.to_string()
+            acme,
+            port: tls_port.to_string()
         }
     }
 }
 
-const REDIRECT_BODY: &[u8] = "<html><body>301 Moved Permanently</body></html>".as_bytes();
+impl CleartextHandler {
 
-#[async_trait]
-impl ServeHttp for TlsRedirector {
-    async fn response(&self, session: &mut ServerSession) -> Response<Vec<u8>> {
+    async fn redirect_to_tls(&self, session: &mut ServerSession) -> Response<Vec<u8>> {
         let host = session.get_header(header::HOST)
             .expect("Failed to get host header on HTTP service")
             .to_str()
             .expect("Failed to convert host header to str");
+        let path = session.req_header().uri.clone();
+
         // Uri::Authority doesn't allow port overrides, so mangle the string
         let new_host = rewrite_port(host, &self.port);
 
-        let uri = session.req_header().uri.clone();
         // TODO: `host` may not be full authority (i.e. including
         // uname:pw section). Does it matter?
-        let location = Builder::from(uri)
+        let location = Builder::from(path)
             .scheme(Scheme::HTTPS)
             .authority(new_host)
             .build()
@@ -57,9 +62,60 @@ impl ServeHttp for TlsRedirector {
             .header(header::LOCATION, location.to_string())
             .body(body)
             .expect("Failed to create HTTP->HTTPS redirect response")
+
+    }
+
+    async fn acme_challenge(&self, session: &mut ServerSession) -> Response<Vec<u8>> {
+        let fqdn = session.get_header(header::HOST)
+            .expect("Failed to get host header on HTTP service")
+            .to_str()
+            .expect("Failed to convert host header to str");
+
+        let path = session.req_header().uri.path_and_query()
+            .expect("Failed to find already matched path?");
+
+        let not_found = Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(TOKEN_NOT_FOUND.to_vec())
+                .expect("Failed to send 404 response to token");
+
+        let path_token = match path.path().strip_prefix(ACME_HTTP01_PREFIX) {
+            Some(token) => token,
+            None => return not_found,
+        };
+
+        let key_auth = if let Some(toks) = self.acme.challenge_tokens(fqdn)
+            && toks.token == path_token
+        {
+            toks.key_auth
+        } else {
+            return not_found
+        };
+
+        let body = key_auth.as_bytes().to_vec();
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/plain")
+            .header(header::CONTENT_LENGTH, body.len())
+            .body(body)
+            .expect("Failed to create HTTP->HTTPS redirect response")
     }
 }
 
+#[async_trait]
+impl ServeHttp for CleartextHandler {
+    async fn response(&self, session: &mut ServerSession) -> Response<Vec<u8>> {
+        // URI in practice == /the/path/to/resource
+        let path_p = session.req_header().uri.path_and_query();
+        if let Some(pq) = path_p
+            && pq.path().starts_with(ACME_HTTP01_PREFIX)
+        {
+            self.acme_challenge(session).await
+        } else {
+            self.redirect_to_tls(session).await
+        }
+    }
+}
 
 
 pub struct Vicarian {
