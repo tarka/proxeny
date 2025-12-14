@@ -242,28 +242,38 @@ impl AcmeRuntime {
 
         info!("Create order for {}", params.acme_host.fqdn);
         let hid = Identifier::Dns(params.acme_host.fqdn.clone());
+
         let mut order = account.new_order(&NewOrder::new(&[hid])).await?;
-        let mut authz = order.authorizations();
-        let mut auth = authz.next().await
-            .ok_or(anyhow!("No authorisation found for {} in order", params.acme_host.fqdn))??;
-        info!("Processing {:?}", auth.status);
-        match auth.status {
-            AuthorizationStatus::Pending => {}
-            // It's technically possibly to pick up an old auth order here
-            // which returns ::Valid?
-            AuthorizationStatus::Valid => {},
-            _ => todo!(),
+        let mut authorisations = order.authorizations();
+
+
+        while let Some(result) = authorisations.next().await {
+            let mut auth = result?;
+
+            info!("Processing {:?}", auth.status);
+            match auth.status {
+                AuthorizationStatus::Pending => {}
+                // It's technically possibly to pick up an old auth order here
+                // which returns ::Valid?
+                AuthorizationStatus::Valid => {},
+                _ => todo!(),
+            }
+
+            info!("Creating challenge");
+            let mut challenge = auth
+                .challenge(ChallengeType::from(&params.acme_host.challenge_type))
+                .ok_or_else(|| anyhow!("No {:?} challenge found", params.acme_host.challenge_type))?;
+
+            // As DNS providers generally don't allow concurrent
+            // updates to a zone we need to process these series.
+            //
+            // TODO: We could process the post-provision checks and
+            // set_ready() in parallel with futures/join_all.
+            self.provision_challenge(&params, &challenge).await?;
+
+            info!("Setting challenge to ready");
+            challenge.set_ready().await?;
         }
-
-        info!("Creating challenge");
-        let mut challenge = auth
-            .challenge(ChallengeType::from(&params.acme_host.challenge_type))
-            .ok_or_else(|| anyhow!("No {:?} challenge found", params.acme_host.challenge_type))?;
-
-        self.provision_challenge(&params, &challenge).await?;
-
-        info!("Setting challenge to ready");
-        challenge.set_ready().await?;
 
         info!("Polling challenge status");
         let status = order.poll_ready(&RetryPolicy::default()).await?;
@@ -326,11 +336,13 @@ impl AcmeRuntime {
     async fn provision_challenge(&self, params: &AcmeParams<'_>, challenge: &ChallengeHandle<'_>) -> Result<()> {
         match &params.acme_host.challenge_type {
             AcmeChallenge::Dns01(provider) => {
-                let dns_client = get_dns_client(params, provider);
 
                 let token = challenge.key_authorization().dns_value();
+
                 info!("Creating TXT: {} -> {}", params.txt_name, token);
+                let dns_client = get_dns_client(params, provider);
                 dns_client.create_txt_record(params.txt_name, &token).await?;
+
                 wait_for_dns(params.txt_fqdn).await?;
             }
             AcmeChallenge::Http01 => {
