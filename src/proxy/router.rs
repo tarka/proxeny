@@ -1,4 +1,5 @@
 use path_tree::PathTree;
+use tracing::info;
 
 use crate::config::Backend;
 
@@ -23,9 +24,10 @@ impl Router {
         for b in backends {
             // FIXME: Backend could be Arc, but probably not worth it?
             let backend = b.clone();
+            info!("Inserting path {:?}", b.context);
             match b.context {
                 Some(ref path) => {
-                    let path = if path.ends_with("/") {
+                    let path = if path.len() > 1 && path.ends_with("/") {
                         let len = path.len();
                         path.as_str()[..len-1].to_string()
                     } else {

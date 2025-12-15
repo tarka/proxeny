@@ -101,7 +101,7 @@ pub struct TlsFilesConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub struct TlsConfig {
-    #[serde(default = "default_u16::<80>")]
+    #[serde(default = "default_u16::<443>")]
     pub port: u16,
     pub config: TlsConfigType,
 }
@@ -123,6 +123,7 @@ pub struct Backend {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Insecure {
+    #[serde(default = "default_u16::<80>")]
     pub port: u16,
     #[serde(default = "default_bool::<true>")]
     pub redirect: bool,

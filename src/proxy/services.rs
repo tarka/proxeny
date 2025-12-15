@@ -171,6 +171,7 @@ impl ProxyHttp for Vicarian {
             .as_u16();
 
         let peer = HttpPeer::new((host, port), tls, host.to_string());
+        debug!("Using peer: {peer:?}");
         Ok(Box::new(peer))
     }
 }
