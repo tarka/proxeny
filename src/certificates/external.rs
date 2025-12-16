@@ -39,8 +39,8 @@ impl ExternalProvider {
                             tfc.reload)?;
 
                         let server_host = uri_host(&s.hostname)?;
-                        if server_host != hostcert.host {
-                            bail!("Certificate {} doesn't match server host {}", hostcert.host, server_host);
+                        if server_host != hostcert.hostname {
+                            bail!("Certificate {} doesn't match server host {}", hostcert.hostname, server_host);
                         }
                         Ok(Arc::new(hostcert))
                     })();

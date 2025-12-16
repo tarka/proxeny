@@ -136,6 +136,8 @@ pub struct Config {
     /// This should the FQDN, especially if using ACME as it is used
     /// to calculate the domain.
     pub hostname: String,
+    #[serde_inline_default(Vec::new())]
+    pub aliases: Vec<String>,
     #[serde_inline_default("[::]".to_string())]
     pub listen: String,
     pub insecure: Option<Insecure>,
@@ -162,9 +164,11 @@ impl Config {
         Ok(config)
     }
 
+    // FIXME: Should be ::default? It's only really used in tests.
     pub fn empty() -> Self {
         Self {
             hostname: String::new(),
+            aliases: Vec::new(),
             listen: String::new(),
             insecure: None,
             tls: TlsConfig {

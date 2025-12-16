@@ -96,3 +96,34 @@ fn test_extract_files() -> Result<()> {
 
     Ok(())
 }
+
+
+#[test]
+fn test_dns01_dev_config() -> Result<()> {
+    let file = Utf8PathBuf::from("vicarian.corn");
+    // This is the file I use for local dev, ignore if it's not there.
+    if ! file.exists() {
+        return Ok(())
+    }
+
+    let config = Config::from_file(&file)?;
+    assert_eq!("dvalinn.haltcondition.net", config.hostname);
+    assert_eq!("llm-dev.haltcondition.net", config.aliases[0]);
+    assert_eq!("dev.haltcondition.net", config.aliases[1]);
+
+    assert_eq!(8443, config.tls.port);
+    assert!(matches!(&config.tls.config, TlsConfigType::Acme(
+        TlsAcmeConfig {
+            contact: _,
+            acme_provider: AcmeProvider::LetsEncrypt,
+            directory: _,
+            challenge_type: AcmeChallenge::Dns01(DnsProvider {
+                dns_provider: zone_update::Provider::PorkBun(_)
+            }),
+
+        })));
+
+    assert_eq!("/sonarr", config.backends[0].context.as_ref().unwrap());
+
+    Ok(())
+}

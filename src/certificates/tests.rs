@@ -202,7 +202,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     let hc = Arc::new(HostCertificate::new(key_path.clone(), cert_path.clone(), true)?);
     let certs = vec![hc.clone()];
     let store = Arc::new(CertStore::new(certs, context.clone())?);
-    let original_host = hc.host.clone();
+    let original_host = hc.hostname.clone();
 
     let original_cert = store.by_host(&original_host).unwrap();
     let original_expiry = original_cert.certs[0].not_after().to_string();
@@ -245,9 +245,9 @@ fn test_by_host() {
     let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
     let store = CertStore::new(certs, context).unwrap();
-    let found = store.by_host(&cert.host).unwrap();
+    let found = store.by_host(&cert.hostname).unwrap();
 
-    assert_eq!(found.host, cert.host);
+    assert_eq!(found.hostname, cert.hostname);
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn test_by_file() {
     let store = CertStore::new(certs, context).unwrap();
     let found = store.by_file(&"target/certs/snakeoil-1.key".into()).unwrap();
 
-    assert_eq!(found.host, cert.host);
+    assert_eq!(found.hostname, cert.hostname);
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn test_file_update_success() -> Result<()> {
     let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
     let store = CertStore::new(certs, context)?;
-    let original_host = cert.host.clone();
+    let original_host = cert.hostname.clone();
 
     // The original cert is snakeoil
     let first_cert = store.by_host(&original_host).unwrap();
@@ -310,11 +310,11 @@ fn test_file_update_success() -> Result<()> {
         cert_path.to_str().unwrap(),
         true
     );
-    let new_host = updated_cert_from_file.host;
+    let new_host = updated_cert_from_file.hostname;
 
     // The store should have updated the certificate.
     let updated_cert_from_store = store.by_host(&new_host).expect("Cert not found for new host");
-    assert_eq!(updated_cert_from_store.host, new_host);
+    assert_eq!(updated_cert_from_store.hostname, new_host);
 
     // The old entry should not exist anymore if the host has changed.
     if original_host != new_host {

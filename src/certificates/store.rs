@@ -29,9 +29,14 @@ impl CertStore {
     pub fn new(certs: Vec<Arc<HostCertificate>>, _context: Arc<RunContext>) -> Result<Self> {
         info!("Loading host certificates");
 
-        let by_host = certs.iter()
-            .map(|cert| (cert.host.clone(),
-                         cert.clone()))
+        // Create an entry for each alias
+        let by_host: papaya::HashMap<String, Arc<HostCertificate>> = certs.iter()
+            .flat_map(|cert|
+                 cert.hostnames().into_iter()
+                 .map(|hostname| (
+                     hostname.clone(),
+                     cert.clone()
+                 )))
             .collect();
 
         let by_file = certs.iter()
@@ -64,7 +69,7 @@ impl CertStore {
     }
 
     pub fn upsert(&self, newcert: Arc<HostCertificate>) -> Result<()> {
-        let host = newcert.host.clone();
+        let host = newcert.hostname.clone();
         let keyfile = newcert.keyfile.clone();
         let certfile = newcert.certfile.clone();
 
@@ -79,13 +84,13 @@ impl CertStore {
     }
 
     pub fn update(&self, newcert: Arc<HostCertificate>) -> Result<()> {
-        let host = newcert.host.clone();
+        let host = newcert.hostname.clone();
         let keyfile = newcert.keyfile.clone();
         let certfile = newcert.certfile.clone();
 
         info!("Updating certificate for {host}");
         self.by_host.pin().update(host, |_old| newcert.clone())
-            .ok_or(anyhow!("Matching host for {} not found in cert store", newcert.host))?;
+            .ok_or(anyhow!("Matching host for {} not found in cert store", newcert.hostname))?;
 
         let by_file = self.by_file.pin();
         by_file.update(keyfile, |_old| newcert.clone())

@@ -6,14 +6,15 @@ pub mod watcher;
 #[cfg(test)]
 mod tests;
 
-use std::{fs, hash::{Hash, Hasher}, sync::Arc};
+use std::{fs, hash::{Hash, Hasher}, iter, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
-use boring::asn1::{Asn1Time, Asn1TimeRef};
+use boring::{asn1::{Asn1Time, Asn1TimeRef}, x509::GeneralNameRef};
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, Duration, Utc};
 
 use futures::future::try_join_all;
+use itertools::Itertools;
 use pingora_core::{ErrorType, OkOrErr};
 use pingora_boringssl::{
     pkey::{PKey, Private},
@@ -25,7 +26,8 @@ use crate::{certificates::{acme::AcmeRuntime, store::CertStore, watcher::CertWat
 
 #[derive(Debug)]
 pub struct HostCertificate {
-    host: String,
+    hostname: String,
+    aliases: Vec<String>,
     keyfile: Utf8PathBuf,
     key: PKey<Private>,
     certfile: Utf8PathBuf,
@@ -43,15 +45,22 @@ impl HostCertificate {
     pub fn new(keyfile: Utf8PathBuf, certfile: Utf8PathBuf, watch: bool) -> Result<Self> {
         let (key, certs) = load_certs(&keyfile, &certfile)?;
 
-        let host = cn_host(certs[0].subject_name().print_ex(0)
+        let hostname = cn_host(certs[0].subject_name().print_ex(0)
                          .or_err(ErrorType::InvalidCert, "No host/CN in certificate")?)?;
-        info!("Loaded certificate {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
+        info!("Loading certificate {:?}, expires {}", certs[0].subject_name(), certs[0].not_after());
+
+        let aliases = certs[0].subject_alt_names()
+            .iter().flatten()
+            .filter_map(GeneralNameRef::dnsname)
+            .map(str::to_owned)
+            .collect();
 
         let not_after = certs[0].not_after();
         let expires = asn1time_to_datetime(not_after)?;
 
         Ok(HostCertificate {
-            host,
+            hostname,
+            aliases,
             keyfile,
             key,
             certfile,
@@ -77,6 +86,13 @@ impl HostCertificate {
         let in_days = Utc::now() + Duration::days(days);
         in_days >= self.expires
     }
+
+    pub fn hostnames(&self) -> Vec<&String> {
+        iter::once(&self.hostname)
+            .chain(self.aliases.iter())
+            .unique()
+            .collect()
+    }
 }
 
 fn asn1time_to_datetime(not_after: &Asn1TimeRef) -> Result<DateTime<Utc>> {
@@ -94,11 +110,11 @@ fn asn1time_to_datetime(not_after: &Asn1TimeRef) -> Result<DateTime<Utc>> {
 
 impl PartialEq<HostCertificate> for HostCertificate {
     fn eq(&self, other: &Self) -> bool {
-        self.host == other.host
+        self.hostname == other.hostname
     }
 
     fn ne(&self, other: &Self) -> bool {
-        self.host != other.host
+        self.hostname != other.hostname
     }
 }
 
@@ -107,7 +123,7 @@ impl Eq for HostCertificate {
 
 impl Hash for HostCertificate {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.host.hash(state)
+        self.hostname.hash(state)
     }
 }
 
