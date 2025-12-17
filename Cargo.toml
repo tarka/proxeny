@@ -24,7 +24,9 @@ dnsclient = "0.2.0"
 futures = "0.3.31"
 http = "1.4.0"
 http-serde = "2.1.1"
-instant-acme = { version = "0.8.4", features = ["time"] }
+#instant-acme = { version = "0.8.4", features = ["time"] }
+instant-acme = { path = "../../software/instant-acme/", features = ["time"] }
+
 itertools = "0.14.0"
 libcorn = "0.10.0"
 notify = { version = "8.2.0", default-features = false, features = ["crossbeam-channel", "fsevent-sys"] }
