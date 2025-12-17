@@ -144,7 +144,7 @@ impl AcmeRuntime {
         let mut quit_rx = self.context.quit_rx.clone();
         loop {
 
-            let next = self.next_expiring_secs()
+            let next = self.certstore.next_expiring_secs()
                 .map(|s| tokio::time::Duration::from_secs(s));
             if let Some(d) = next {
                 let dt = Utc::now() + d;
@@ -176,16 +176,6 @@ impl AcmeRuntime {
             self.renew_acme(&ahost).await?;
         }
         Ok(())
-    }
-
-    fn next_expiring_secs(&self) -> Option<u64> {
-        self.acme_hosts.iter()
-            // TODO: This currently just skips missing hosts.
-            .filter_map(|ah| self.certstore.by_host(&ah.fqdn))
-            .map(|hc| hc.expires_in())
-            .sorted()
-            .next()
-            .map(|s| s.max(0) as u64)
     }
 
     async fn renew_acme(&self, acme_host: &AcmeHost) -> Result<Arc<HostCertificate>> {
@@ -239,6 +229,7 @@ impl AcmeRuntime {
             .collect::<Vec<Identifier>>();
 
         let mut order = account.new_order(&NewOrder::new(&hids)).await?;
+
         let mut authorisations = order.authorizations();
 
 
@@ -336,8 +327,6 @@ impl AcmeRuntime {
                 let txt_name = self.to_txt_name(acme_host, &fqdn)?;
                 let txt_fqdn = format!("_acme-challenge.{fqdn}");
                 let token = challenge.key_authorization().dns_value();
-
-                println!("ID: {}", challenge.identifier());
 
                 info!("Creating TXT: {} -> {}", txt_name, token);
                 let dns_client = get_dns_client(acme_host, provider);
