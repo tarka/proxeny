@@ -107,9 +107,8 @@ fn test_dns01_dev_config() -> Result<()> {
     }
 
     let config = Config::from_file(&file)?;
-    assert_eq!("dvalinn.haltcondition.net", config.hostname);
-    assert_eq!("llm-dev.haltcondition.net", config.aliases[0]);
-    assert_eq!("dev.haltcondition.net", config.aliases[1]);
+    assert_eq!("www.vicarian.org", config.hostname);
+    assert_eq!("staging.vicarian.org", config.aliases[0]);
 
     assert_eq!(8443, config.tls.port);
     assert!(matches!(&config.tls.config, TlsConfigType::Acme(
@@ -118,7 +117,7 @@ fn test_dns01_dev_config() -> Result<()> {
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
             challenge_type: AcmeChallenge::Dns01(DnsProvider {
-                dns_provider: zone_update::Provider::PorkBun(_)
+                dns_provider: zone_update::Provider::Cloudflare(_)
             }),
 
         })));

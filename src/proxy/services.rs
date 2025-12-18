@@ -10,6 +10,7 @@ use pingora_core::{
     ErrorType, OkOrErr, OrErr, apps::http_app::ServeHttp, prelude::HttpPeer,
     protocols::http::ServerSession,
 };
+use pingora_http::RequestHeader;
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info};
 
@@ -171,7 +172,25 @@ impl ProxyHttp for Vicarian {
             .as_u16();
 
         let peer = HttpPeer::new((host, port), tls, host.to_string());
+
         debug!("Using peer: {peer:?}");
         Ok(Box::new(peer))
     }
+
+    async fn upstream_request_filter(&self, session: &mut Session, upstream_request: &mut RequestHeader,
+                                     _ctx: &mut Self::CTX,)
+                                     -> pingora_core::Result<()>
+    {
+
+        if let Some(sockaddr) = session.client_addr()
+            && let Some(inet) = sockaddr.as_inet()
+        {
+            let ip = inet.ip().to_string();
+            info!("Inserting x-forwarded-for: {ip}");
+            upstream_request.insert_header("X-Forwarded-For", ip)?;
+        }
+
+        Ok(())
+    }
+
 }

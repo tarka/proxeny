@@ -33,7 +33,7 @@ impl CertStore {
         // Create an entry for each alias
         let by_host: papaya::HashMap<String, Arc<HostCertificate>> = certs.iter()
             .flat_map(|cert|
-                 cert.hostnames().into_iter()
+                 cert.hostnames.iter()
                  .map(|hostname| (
                      hostname.clone(),
                      cert.clone()
@@ -70,13 +70,15 @@ impl CertStore {
     }
 
     pub fn upsert(&self, newcert: Arc<HostCertificate>) -> Result<()> {
-        let host = newcert.hostname.clone();
+        for hostname in newcert.hostnames.iter() {
+            let host = hostname.clone();
+
+            info!("Updating/inserting certificate for {host}");
+            self.by_host.pin().update_or_insert(host, |_old| newcert.clone(), newcert.clone());
+        }
+
         let keyfile = newcert.keyfile.clone();
         let certfile = newcert.certfile.clone();
-
-        info!("Updating/inserting certificate for {host}");
-        self.by_host.pin().update_or_insert(host, |_old| newcert.clone(), newcert.clone());
-
         let by_file = self.by_file.pin();
         by_file.update_or_insert(keyfile, |_old| newcert.clone(), newcert.clone());
         by_file.update_or_insert(certfile, |_old| newcert.clone(), newcert.clone());
@@ -85,14 +87,14 @@ impl CertStore {
     }
 
     pub fn update(&self, newcert: Arc<HostCertificate>) -> Result<()> {
-        let host = newcert.hostname.clone();
+        for hostname in newcert.hostnames.iter() {
+            info!("Updating certificate for {hostname}");
+            self.by_host.pin().update(hostname.clone(), |_old| newcert.clone())
+                .ok_or(anyhow!("Matching host for {} not found in cert store", hostname))?;
+        }
+
         let keyfile = newcert.keyfile.clone();
         let certfile = newcert.certfile.clone();
-
-        info!("Updating certificate for {host}");
-        self.by_host.pin().update(host, |_old| newcert.clone())
-            .ok_or(anyhow!("Matching host for {} not found in cert store", newcert.hostname))?;
-
         let by_file = self.by_file.pin();
         by_file.update(keyfile, |_old| newcert.clone())
             .ok_or(anyhow!("File {} not found in cert store", newcert.keyfile))?;
@@ -106,8 +108,10 @@ impl CertStore {
         let by_host = self.by_host.pin();
         by_host.values()
             .filter_map(|h| if h.watch {
+                println!("WATCHED: {}", h.hostnames[0]);
                 Some(vec![h.keyfile.clone(), h.certfile.clone()])
             } else {
+                println!("NOT WATCHED: {}", h.hostnames[0]);
                 None
             })
             .flatten()

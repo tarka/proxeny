@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
-use http::Uri;
+use anyhow::Result;
 use tracing_log::log::debug;
 
 use crate::{
@@ -9,14 +8,6 @@ use crate::{
     certificates::HostCertificate,
     config::TlsConfigType
 };
-
-fn uri_host(uri: &String) -> Result<String> {
-    let parsed = Uri::try_from(uri)?;
-    let host = parsed.host()
-        .context("Failed to find host in servername '{uri}'")?;
-    Ok(host.to_string())
-}
-
 
 /// Externally managed certificates
 // TODO: Need a better name
@@ -38,10 +29,6 @@ impl ExternalProvider {
                             tfc.certfile.clone(),
                             tfc.reload)?;
 
-                        let server_host = uri_host(&s.hostname)?;
-                        if server_host != hostcert.hostname {
-                            bail!("Certificate {} doesn't match server host {}", hostcert.hostname, server_host);
-                        }
                         Ok(Arc::new(hostcert))
                     })();
 

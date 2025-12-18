@@ -228,7 +228,9 @@ impl AcmeRuntime {
             .map(Identifier::Dns)
             .collect::<Vec<Identifier>>();
 
-        let mut order = account.new_order(&NewOrder::new(&hids)).await?;
+        let no = NewOrder::new(&hids)
+            .profile("tlsserver");
+        let mut order = account.new_order(&no).await?;
 
         let mut authorisations = order.authorizations();
 
@@ -450,4 +452,3 @@ async fn wait_for_dns(txt_fqdn: &String) -> Result<()> {
 
     Err(anyhow!("Failed to find record {txt_fqdn} in public DNS"))
 }
-

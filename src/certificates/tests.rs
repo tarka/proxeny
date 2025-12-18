@@ -76,7 +76,6 @@ fn gen_cert(host: &str,
 
     if ! (keyfile.exists() && certfile.exists()) {
 
-        let subj = "/C=AU/ST=NSW/L=Sydney/O=Example Org./CN=";
         let out = Command::new("openssl")
             .arg("req")
             .arg("-x509")
@@ -85,7 +84,7 @@ fn gen_cert(host: &str,
             .arg("-not_after").arg(not_after.format("%Y%m%d000000Z").to_string())
             .arg("-out").arg(&certfile)
             .arg("-keyout").arg(&keyfile)
-            .arg("-subj").arg(format!("{subj}{host}"))
+            .arg("-subj").arg(format!("/CN={host}"))
             .output()?;
         info!("OPENSSL: {out:#?}");
     }
@@ -96,40 +95,6 @@ fn gen_cert(host: &str,
 }
 
 static TEST_CERTS: LazyLock<TestCerts> = LazyLock::new(|| TestCerts::new().unwrap());
-
-
-#[test]
-fn test_cn_host_valid_cn() -> Result<()> {
-    let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd, CN=vicarian.example.com".to_string();
-    let host = cn_host(cn_string)?;
-    assert_eq!(host, "vicarian.example.com");
-    Ok(())
-}
-
-#[test]
-fn test_cn_host_no_cn() {
-    let cn_string = "C=AU, ST=Some-State, O=Internet Widgits Pty Ltd".to_string();
-    let result = cn_host(cn_string);
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Failed to find host in cert 'CN=...'"));
-}
-
-#[test]
-fn test_cn_host_multiple_equals_in_cn() -> Result<()> {
-    let cn_string = "C=US, O=Example Inc., CN=my.host=name.com".to_string();
-    let host = cn_host(cn_string)?;
-    assert_eq!(host, "my.host=name.com");
-    Ok(())
-}
-
-#[test]
-fn test_cn_host_cn_with_spaces() -> Result<()> {
-    let cn_string = "C=US, CN=  another.example.com  ".to_string();
-    let host = cn_host(cn_string)?;
-    // strip_prefix also trims, so the result should be trimmed
-    assert_eq!(host, "another.example.com");
-    Ok(())
-}
 
 #[test]
 fn test_load_certs_valid_pair() -> Result<()> {
@@ -202,7 +167,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     let hc = Arc::new(HostCertificate::new(key_path.clone(), cert_path.clone(), true)?);
     let certs = vec![hc.clone()];
     let store = Arc::new(CertStore::new(certs, context.clone())?);
-    let original_host = hc.hostname.clone();
+    let original_host = hc.hostnames[0].clone();
 
     let original_cert = store.by_host(&original_host).unwrap();
     let original_expiry = original_cert.certs[0].not_after().to_string();
@@ -245,9 +210,9 @@ fn test_by_host() {
     let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
     let store = CertStore::new(certs, context).unwrap();
-    let found = store.by_host(&cert.hostname).unwrap();
+    let found = store.by_host(&cert.hostnames[0]).unwrap();
 
-    assert_eq!(found.hostname, cert.hostname);
+    assert_eq!(found, cert);
 }
 
 #[test]
@@ -258,7 +223,7 @@ fn test_by_file() {
     let store = CertStore::new(certs, context).unwrap();
     let found = store.by_file(&"target/certs/snakeoil-1.key".into()).unwrap();
 
-    assert_eq!(found.hostname, cert.hostname);
+    assert_eq!(found, cert);
 }
 
 #[test]
@@ -291,7 +256,7 @@ fn test_file_update_success() -> Result<()> {
     let certs = vec![cert.clone()];
     let context = Arc::new(RunContext::new(Config::empty()));
     let store = CertStore::new(certs, context)?;
-    let original_host = cert.hostname.clone();
+    let original_host = cert.hostnames[0].clone();
 
     // The original cert is snakeoil
     let first_cert = store.by_host(&original_host).unwrap();
@@ -310,11 +275,11 @@ fn test_file_update_success() -> Result<()> {
         cert_path.to_str().unwrap(),
         true
     );
-    let new_host = updated_cert_from_file.hostname;
+    let new_host = updated_cert_from_file.hostnames[0].clone();
 
     // The store should have updated the certificate.
     let updated_cert_from_store = store.by_host(&new_host).expect("Cert not found for new host");
-    assert_eq!(updated_cert_from_store.hostname, new_host);
+    assert_eq!(updated_cert_from_store.hostnames[0], new_host);
 
     // The old entry should not exist anymore if the host has changed.
     if original_host != new_host {
@@ -383,4 +348,11 @@ fn test_asn1time_to_datetime_future() -> Result<()> {
     assert_eq!(datetime, expected);
 
     Ok(())
+}
+
+#[test]
+fn test_no_subject() {
+    let _no_subject = test_cert("tests/data/certs/www.vicarian.no-subject.key",
+                               "tests/data/certs/www.vicarian.no-subject.crt",
+                               false);
 }
