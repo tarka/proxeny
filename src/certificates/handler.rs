@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pingora_boringssl::ssl::NameType;
 use pingora_core::{listeners::TlsAccept, protocols::tls::TlsRef};
-use tracing_log::log::{debug, info};
+use tracing_log::log::debug;
 
 use crate::certificates::store::CertStore;
 
@@ -29,7 +29,7 @@ impl TlsAccept for CertHandler {
         let host = ssl.servername(NameType::HOST_NAME)
             .expect("No servername in TLS handshake");
 
-        info!("TLS Host is {host}; loading certs");
+        debug!("TLS Host is {host}; loading certs");
 
         let cert = self.certstore.by_host(&host.to_string())
             .expect("Certificate for host not found");
