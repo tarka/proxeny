@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use http::{
-    header::{self, LOCATION, REFRESH}, uri::{Builder, Scheme}, HeaderValue, Response, StatusCode, Uri
+    header::{self, LOCATION, REFRESH, VIA}, uri::{Builder, Scheme}, HeaderValue, Response, StatusCode, Uri
 };
 
 use pingora_core::{
@@ -241,7 +241,6 @@ impl ProxyHttp for Vicarian {
             upstream_request.insert_header("X-Real-IP", &ip)?;
         }
 
-
         Ok(())
     }
 
@@ -277,6 +276,10 @@ impl ProxyHttp for Vicarian {
                 }
             }
         }
+
+        let via = format!("{:?} Vicarian", session.req_header().version);
+        upstream_response.insert_header("Via", via)?;
+
         Ok(())
     }
 
