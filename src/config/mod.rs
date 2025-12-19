@@ -119,6 +119,8 @@ pub struct Backend {
     pub context: Option<String>,
     #[serde(with = "http_serde::uri")]
     pub url: Uri,
+    #[serde(default = "default_bool::<false>")]
+    pub trust: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

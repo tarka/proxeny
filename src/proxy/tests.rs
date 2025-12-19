@@ -47,19 +47,23 @@ fn test_router() -> Result<()> {
     let backends = vec![
         Backend {
             context: None,
-            url: Uri::from_static("http://localhost:1010")
+            url: Uri::from_static("http://localhost:1010"),
+            trust: false,
         },
         Backend {
             context: Some("/service".to_string()),
-            url: Uri::from_static("http://localhost:2020")
+            url: Uri::from_static("http://localhost:2020"),
+            trust: false,
         },
         Backend {
             context: Some("/service/subservice/".to_string()),
-            url: Uri::from_static("http://localhost:3030")
+            url: Uri::from_static("http://localhost:3030"),
+            trust: false,
         },
         Backend {
             context: Some("/other_service/".to_string()),
-            url: Uri::from_static("http://localhost:4040")
+            url: Uri::from_static("http://localhost:4040"),
+            trust: false,
         },
     ];
 

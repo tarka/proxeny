@@ -8,8 +8,7 @@ use http::{
 };
 
 use pingora_core::{
-    ErrorType, OkOrErr, OrErr, apps::http_app::ServeHttp, prelude::HttpPeer,
-    protocols::http::ServerSession,
+    apps::http_app::ServeHttp, prelude::HttpPeer, protocols::http::ServerSession, upstreams::peer::Peer, ErrorType, OkOrErr, OrErr
 };
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
@@ -185,10 +184,11 @@ impl ProxyHttp for Vicarian {
         let router = pinned.get(&components.host.to_string())
             .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "UP: Hostname not found in backends")?;
 
-        let matched = router.lookup(components.path)
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "UP: Path not found in host backends")?;
+        let backend = router.lookup(components.path)
+            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "UP: Path not found in host backends")?
+            .backend;
 
-        let url = &matched.backend.url;
+        let url = &backend.url;
         let tls = url.scheme() == Some(&Scheme::HTTPS);
         let host = url.host()
             .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Backend host lookup failed")?;
@@ -196,7 +196,12 @@ impl ProxyHttp for Vicarian {
             .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Backend port lookup failed")?
             .as_u16();
 
-        let peer = HttpPeer::new((host, port), tls, host.to_string());
+        let mut peer = HttpPeer::new((host, port), tls, host.to_string());
+        if backend.trust
+            && let Some(opts) = peer.get_mut_peer_options()
+        {
+            opts.verify_cert = false;
+        }
 
         debug!("Using peer: {peer:?}");
         Ok(Box::new(peer))
