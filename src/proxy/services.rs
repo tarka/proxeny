@@ -207,7 +207,7 @@ impl ProxyHttp for Vicarian {
                                      _ctx: &mut Self::CTX,)
                                      -> pingora_core::Result<()>
     {
-        info!("Req: {}", session.req_header().uri);
+        debug!("Req: {}", session.req_header().uri);
         let components = to_components(session)?;
 
         let pinned = self.routes_by_host.pin();
