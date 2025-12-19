@@ -77,10 +77,10 @@ fn rewrite_port(host: &str, newport: &str) -> String {
     format!("{host_only}:{newport}")
 }
 
-fn strip_port(host_header: &str) -> String {
+fn strip_port(host_header: &str) -> &str {
     if let Some(i) = host_header.rfind(':') {
-        host_header[0..i].to_string()
+        &host_header[0..i]
     } else {
-        host_header.to_string()
+        host_header
     }
 }

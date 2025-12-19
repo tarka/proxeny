@@ -99,6 +99,7 @@ fn test_extract_files() -> Result<()> {
 
 
 #[test]
+#[ignore]
 fn test_dns01_dev_config() -> Result<()> {
     let file = Utf8PathBuf::from("vicarian.corn");
     // This is the file I use for local dev, ignore if it's not there.
