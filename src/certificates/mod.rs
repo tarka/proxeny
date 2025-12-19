@@ -98,8 +98,8 @@ impl HostCertificate {
         diff.num_seconds()
     }
 
-    pub fn is_expiring_in(&self, days: i64) -> bool {
-        let in_days = Utc::now() + Duration::days(days);
+    pub fn is_expiring_in(&self, days: u64) -> bool {
+        let in_days = Utc::now() + Duration::days(days as i64);
         in_days >= self.expires
     }
 }

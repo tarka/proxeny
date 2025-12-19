@@ -2,6 +2,6 @@
 /tests/data/certs/external
 /.idea
 \#*\#
-/vicarian.corn
+/*.corn
 .envrc
 *~

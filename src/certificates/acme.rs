@@ -22,7 +22,11 @@ use crate::{
     config::{AcmeChallenge, DnsProvider, TlsConfigType},
 };
 
-const EXPIRY_WINDOW: i64 = 30;
+const LE_PROFILE: &str = "shortlived";
+const _EXPIRY_WINDOW_DAYS: i64 = 30;
+const _EXPIRY_WINDOW_SECS: i64 = _EXPIRY_WINDOW_DAYS * 24 * 60 * 60;
+const EXPIRY_WINDOW_SHORTLIVED_DAYS: u64 = 6;
+const EXPIRY_WINDOW_SHORTLIVED_SECS: u64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 60 * 60;
 
 struct AcmeHost {
     fqdn: String,
@@ -143,8 +147,8 @@ impl AcmeRuntime {
 
         let mut quit_rx = self.context.quit_rx.clone();
         loop {
-
             let next = self.certstore.next_expiring_secs()
+                .map(|s| (s - EXPIRY_WINDOW_SHORTLIVED_SECS).max(0))
                 .map(|s| tokio::time::Duration::from_secs(s));
             if let Some(d) = next {
                 let dt = Utc::now() + d;
@@ -210,10 +214,10 @@ impl AcmeRuntime {
     /// Returns certs that need creating or refreshing
     fn pending(&self) -> Vec<&AcmeHost> {
         self.acme_hosts.iter()
-        // Either None or expiring with 30 days.
-        // TODO: This could use renewal_info() in instant-acme.
+            // Either None or expiring within window.
+            // TODO: This could use renewal_info() in instant-acme.
             .filter(|ah| ! self.certstore.by_host(&ah.fqdn)
-                    .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW)))
+                    .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW_SHORTLIVED_DAYS)))
             .collect()
     }
 
@@ -229,7 +233,7 @@ impl AcmeRuntime {
             .collect::<Vec<Identifier>>();
 
         let no = NewOrder::new(&hids)
-            .profile("tlsserver");
+            .profile(LE_PROFILE);
         let mut order = account.new_order(&no).await?;
 
         let mut authorisations = order.authorizations();

@@ -215,7 +215,7 @@ impl ProxyHttp for Vicarian {
             && context != "" && context != "/"
             && !backend.url.path().starts_with(context)
         {
-            info!("Modifying {} for context {context}", upstream_request.uri);
+            debug!("Modifying {} for context {context}", upstream_request.uri);
             let upath = upstream_request.uri.path()
                 .strip_prefix(context)
                 .unwrap_or("/");
@@ -227,7 +227,7 @@ impl ProxyHttp for Vicarian {
                 .path_and_query(upq)
                 .build()
                 .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Failed to rewrite path")?;
-            info!("Modified to {uuri}");
+            debug!("Modified to {uuri}");
             upstream_request.set_uri(uuri);
         }
 
@@ -271,13 +271,12 @@ impl ProxyHttp for Vicarian {
                     let newloc = HeaderValue::from_str(&format!("{context}{oldloc}"))
                         .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Failed to rewrite location header")?;
 
-                    info!("Modifying Location to {newloc:?}");
+                    debug!("Modifying Location to {newloc:?}");
                     let _old = upstream_response.insert_header(&headername, newloc);
                 }
             }
         }
         Ok(())
     }
-
 
 }
