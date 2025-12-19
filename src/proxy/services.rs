@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use http::{
-    header::{self, LOCATION, REFRESH, VIA}, uri::{Builder, Scheme}, HeaderValue, Response, StatusCode, Uri
+    HeaderValue, Response, StatusCode, Uri,
+    header::{self, LOCATION, REFRESH},
+    uri::{Builder, Scheme},
 };
 
 use pingora_core::{
@@ -13,7 +15,11 @@ use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info};
 
-use crate::{certificates::{acme::AcmeRuntime, store::CertStore}, proxy::{rewrite_port, router::Router, strip_port}, RunContext};
+use crate::{
+    RunContext,
+    certificates::{acme::AcmeRuntime, store::CertStore},
+    proxy::{rewrite_port, router::Router, strip_port},
+};
 
 const REDIRECT_BODY: &[u8] = "<html><body>301 Moved Permanently</body></html>".as_bytes();
 const TOKEN_NOT_FOUND: &[u8] = "<html><body>ACME token not found in request path</body></html>".as_bytes();
