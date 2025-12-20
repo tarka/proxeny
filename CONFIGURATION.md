@@ -6,7 +6,8 @@ behave, including TLS settings, backend services, and routing.
 
 ## Basic Structure
 
-A typical vicarian configuration file includes the following top-level fields:
+A minimal Vicarian configuration file would look something like this (note: it
+could be made smaller, but some defaults have been left in for clarity):
 
 ```corn
 {
@@ -24,7 +25,7 @@ A typical vicarian configuration file includes the following top-level fields:
     config = {
       // Or `files` for existing certificates.
       acme = {
-        acme_provider = "letsencrypt"
+        acme_provider = "letsencrypt"  // Default; only supported provider currently
         contact = "admin@example.com"
         challenge.type = "http-01" // `dns-01` is also supported, see below
       }
@@ -44,6 +45,14 @@ A typical vicarian configuration file includes the following top-level fields:
   ]
 }
 ```
+
+## Example Configurations
+
+See the example configuration files in the `examples/` directory for basic working examples:
+
+- `vicarian-tls-files.corn`: TLS with certificate files
+- `vicarian-http01.corn`: ACME with HTTP-01 challenge
+- `vicarian-dns01.corn`: ACME with DNS-01 challenge
 
 ## Configuration Fields
 
@@ -116,7 +125,6 @@ tls = {
   port = 443
   config = {
     acme = {
-      acme_provider = "letsencrypt"
       contact = "admin@example.com"
       challenge.type = "http-01"
     }
@@ -131,7 +139,6 @@ tls = {
   port = 443
   config = {
     acme = {
-      acme_provider = "letsencrypt"
       contact = "admin@example.com"
       challenge = {
         type = "dns-01"  // or "http-01"
