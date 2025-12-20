@@ -35,9 +35,8 @@ fn init_logging(level: u8) -> Result<()> {
 
 pub struct RunContext {
     pub config: Config,
-
-    pub quit_tx: watch::Sender<bool>,
     pub quit_rx: watch::Receiver<bool>,
+    quit_tx: watch::Sender<bool>,
 }
 
 impl RunContext {
