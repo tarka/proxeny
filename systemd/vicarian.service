@@ -9,20 +9,22 @@ Restart=on-abnormal
 User=www-data
 Group=www-data
 
-EnvironmentFile=-/etc/default/vicarian
+EnvironmentFile=-/etc/vicarian/env
+StateDirectory=vicarian
+StateDirectoryMode=0750
+ConfigurationDirectory=vicarian
+ConfigurationDirectoryMode=0750
 
-ExecStart=/opt/vicarian/vicarian -v \
-              --config=/etc/vicarian/vicarian.corn
+ExecStart=/opt/vicarian/bin/vicarian -v
 
 ; Use graceful shutdown with a reasonable timeout
 KillMode=mixed
 KillSignal=SIGINT
 TimeoutStopSec=5s
 
-StateDirectory=vicarian
 
 PrivateTmp=true
-PrivateDevices=false
+PrivateDevices=true
 ProtectHome=read-only
 ProtectSystem=full
 

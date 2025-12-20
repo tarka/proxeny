@@ -197,9 +197,7 @@ impl ProxyHttp for Vicarian {
             .as_u16();
 
         let mut peer = HttpPeer::new((host, port), tls, host.to_string());
-        if backend.trust
-            && let Some(opts) = peer.get_mut_peer_options()
-        {
+        if backend.trust && let Some(opts) = peer.get_mut_peer_options() {
             opts.verify_cert = false;
         }
 
