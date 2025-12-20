@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use notify::{EventKind, RecursiveMode};
@@ -8,8 +8,11 @@ use notify_debouncer_full::{self as debouncer, DebounceEventResult, DebouncedEve
 use tokio::sync::mpsc;
 use tracing_log::log::{debug, info, warn};
 
-use crate::{certificates::{store::CertStore, HostCertificate}, errors::VicarianError, RunContext};
-
+use crate::{
+    RunContext,
+    certificates::{HostCertificate, store::CertStore},
+    errors::VicarianError,
+};
 
 pub const RELOAD_GRACE: Duration = Duration::from_millis(1500);
 
@@ -31,7 +34,12 @@ impl CertWatcher {
     }
 
     pub async fn watch(&mut self) -> Result<()> {
-        info!("Starting certificate watcher runtime");
+        if self.certstore.watchlist().len() == 0 {
+            info!("No watchable certificates configured, not starting Watcher runtime.");
+            return Ok(())
+        }
+
+        info!("Starting certificate Watcher runtime");
 
         let handler = {
             let ev_tx = self.ev_tx.clone();
@@ -58,7 +66,7 @@ impl CertWatcher {
                     }
                 },
                 _ = quit_rx.changed() => {
-                    info!("Quitting certificate watcher runtime");
+                    info!("Quitting certificate Watcher runtime");
                     break;
                 },
             };
