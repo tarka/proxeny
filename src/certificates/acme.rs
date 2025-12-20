@@ -2,7 +2,7 @@ use std::{fs::create_dir_all, iter, net::SocketAddr, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use camino::Utf8PathBuf;
-use chrono::{TimeDelta, Utc};
+use chrono::{DateTime, Local, TimeDelta, Utc};
 use dnsclient::{UpstreamServer, r#async::DNSClient};
 use instant_acme::{
     Account, AccountCredentials, AuthorizationStatus, ChallengeHandle, ChallengeType, Identifier,
@@ -30,6 +30,7 @@ const EXPIRY_WINDOW_SHORTLIVED_SECS: i64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 
 
 const ONE_SECOND: TimeDelta = TimeDelta::new(1, 0).unwrap();
 
+#[derive(Debug)]
 struct AcmeHost {
     fqdn: String,
     aliases: Vec<String>,
@@ -131,6 +132,11 @@ impl AcmeRuntime {
     }
 
     pub async fn run(&self) -> Result<()> {
+        if self.acme_hosts.len() == 0 {
+            info!("No ACME hosts configured, not starting ACME runtime.");
+            return Ok(())
+        }
+
         info!("Starting ACME runtime");
 
         let existing = self.acme_hosts.iter()
@@ -149,20 +155,23 @@ impl AcmeRuntime {
 
         let mut quit_rx = self.context.quit_rx.clone();
         loop {
-            let next = self.certstore.next_expiring_secs()
+            let next_secs = self.next_expiring_secs()
                 .map(|s| (s - EXPIRY_WINDOW_SHORTLIVED_SECS).max(0))
                 .map(|s| TimeDelta::new(s, 0))
                 .flatten();
-            if let Some(d) = next {
-                let dt = Utc::now() + d;
-                info!("Wait for next expiry at {dt}");
+            let expiring_secs = if let Some(seconds) = next_secs {
+                let local: DateTime<Local> = DateTime::from(Utc::now() + seconds);
+                let fmt = local.format("%Y-%m-%d %H:%M:%S %z");
+                info!("Wait for next expiry at {fmt}");
+                seconds
             } else {
-                // TODO: Should we just quit?
-                info!("Nothing expiring, just hanging for now");
-            }
+                let msg = "Nothing expiring; this shouldn't really happen. Exiting.";
+                warn!("{msg}");
+                return Err(anyhow!(msg))
+            };
 
             tokio::select! {
-                _ = tokio::time::sleep(next.unwrap().to_std()?), if next.is_some() => {
+                _ = tokio::time::sleep(expiring_secs.to_std()?) => {
                     info!("Woken up for ACME renewal; processing all pending certs");
                     self.renew_all_pending().await?;
                 }
@@ -224,6 +233,14 @@ impl AcmeRuntime {
             .collect()
     }
 
+    pub fn next_expiring_secs(&self) -> Option<i64> {
+        self.acme_hosts.iter()
+            .filter_map(|ah| self.certstore.by_host(&ah.fqdn))
+            .map(|hc| hc.expires_in_secs())
+            .sorted()
+            .next()
+            .map(|s| s.max(0))
+    }
 
     async fn renew_instant_acme(&self, acme_host: &AcmeHost) -> Result<PemCertificate> {
         info!("Initialising ACME account");

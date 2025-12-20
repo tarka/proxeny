@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
-use itertools::Itertools;
 use tracing::info;
 
 use crate::{
@@ -108,22 +107,11 @@ impl CertStore {
         let by_host = self.by_host.pin();
         by_host.values()
             .filter_map(|h| if h.watch {
-                println!("WATCHED: {}", h.hostnames[0]);
                 Some(vec![h.keyfile.clone(), h.certfile.clone()])
             } else {
-                println!("NOT WATCHED: {}", h.hostnames[0]);
                 None
             })
             .flatten()
             .collect()
-    }
-
-    pub fn next_expiring_secs(&self) -> Option<i64> {
-        let pin = self.by_host.pin();
-        pin.values()
-            .map(|hc| hc.expires_in_secs())
-            .sorted()
-            .next()
-            .map(|s| s.max(0))
     }
 }
