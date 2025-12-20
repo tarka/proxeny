@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vicarian - Reverse Proxy with ACME Support</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Arborium syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@arborium/arborium/dist/themes/github-dark.css">
+    <!-- NOTE: Configuration examples are in Corn language (cornlang.dev) -->
+    <!-- Arborium does not include tree-sitter-corn by default -->
+    <style>
+* {
+             margin: 0;
+             padding: 0;
+             box-sizing: border-box;
+             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+         }
+         
+         body {
+             font-size: 18px; /* Increased default text size */
+         }
+        
+        body {
+            background: linear-gradient(135deg, #0a2e6d, #1a4a9e, #0a2e6d);
+            color: #fff;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            color: #ffffff;
+        }
+        
+        .subtitle {
+            font-size: 1.4rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto 20px;
+        }
+        
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+        }
+        
+.logo {
+             width: 120px;
+             height: 120px;
+             background: rgba(255, 255, 255, 0.1);
+             border-radius: 50%;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             font-size: 4rem;
+             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+         }
+         
+         .logo i {
+             font-size: 4rem; /* Ensure icons are properly sized */
+         }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(255, 77, 77, 0.2);
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 12px 40px rgba(204, 0, 0, 0.3);
+        }
+        
+        .feature-card i {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #ff4d4d;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: linear-gradient(45deg, #ff4d4d, #cc0000);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            margin: 10px;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(204, 0, 0, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(204, 0, 0, 0.4);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #ff4d4d;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin: 50px 0 30px;
+            position: relative;
+        }
+        
+        .section-title:after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(45deg, #ff4d4d, #cc0000);
+            margin: 10px auto;
+            border-radius: 2px;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            margin: 20px 0;
+            overflow-x: auto;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .config-example {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .config-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255, 77, 77, 0.2);
+        }
+        
+        .config-box h3 {
+            text-align: center;
+            margin-bottom: 15px;
+            color: #ff4d4d;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px;
+            margin-top: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 77, 77, 0.2);
+        }
+        
+        .license {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .subtitle {
+                font-size: 1.1rem;
+            }
+            
+            .logo-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-shield-alt"></i> Vicarian</h1>
+            <p class="subtitle">A modern reverse proxy with built-in ACME support for automatic TLS certificate management</p>
+            
+            <div class="logo-container">
+                <div class="logo">
+                    <i class="fas fa-globe"></i>
+                </div>
+                <div class="logo">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <div class="logo">
+                    <i class="fas fa-server"></i>
+                </div>
+            </div>
+            
+            <p>Secure, automated reverse proxy for self-hosted applications</p>
+            
+            <div style="margin: 30px 0;">
+                <a href="#features" class="btn">Learn More</a>
+                <a href="https://github.com/tarka/vicarian" target="_blank" class="btn btn-outline">
+                    <i class="fab fa-github"></i> View on GitHub
+                </a>
+                <a href="https://crates.io/crates/vicarian" target="_blank" class="btn btn-outline">
+                    <i class="fas fa-cube"></i> Crates.io
+                </a>
+            </div>
+        </header>
+
+        <section id="features" class="features">
+            <div class="feature-card">
+                <i class="fas fa-exchange-alt"></i>
+                <h3>Reverse Proxy</h3>
+                <p>Route traffic to multiple backend services based on URL contexts. Perfect for microservices and complex application setups.</p>
+            </div>
+            
+            <div class="feature-card">
+                <i class="fas fa-lock"></i>
+                <h3>Dynamic Certificates</h3>
+                <p>Automatically provision and renew TLS certificates using ACME protocol with both HTTP-01 and DNS-01 challenge types.</p>
+            </div>
+            
+            <div class="feature-card">
+                <i class="fas fa-network-wired"></i>
+                <h3>DNS Integration</h3>
+                <p>Support for multiple DNS providers via the zone-update library. Configure automatic certificate management behind firewalls.</p>
+            </div>
+        </section>
+
+        <section id="about" class="section">
+            <h2 class="section-title">About Vicarian</h2>
+            <p>Vicarian is a reverse proxy server designed for self-hosting and small office/home office installations. It's targeted at users who want to run their own web services with automatic SSL/TLS certificates.</p>
+            
+            <p>This software is currently in pre-alpha stage with a minimal viable product (MVP) feature set. It should not be considered production-ready, but is actively being developed.</p>
+            
+            <div class="code-block">
+                <pre><code class="language-hcl">// Basic configuration example (corn format)
+{
+  hostname = "your-domain.com"
+  listen = "[::]"
+
+  insecure = {
+      port = 80
+      redirect = true
+  }
+
+  tls = {
+    port = 443
+    config = {
+      acme = {
+        acme_provider = "letsencrypt"
+        contact = "admin@your-domain.com"
+        challenge_type = {
+          type = "http-01"
+        }
+      }
+    }
+  }
+
+  backends = [
+    {
+      context = "/"
+      url = "http://localhost:8443"
+      trust = true
+    }
+  ]
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="config-examples" class="section">
+            <h2 class="section-title">Configuration Examples</h2>
+            
+            <div class="config-example">
+                <div class="config-box">
+                    <h3><i class="fas fa-key"></i> Certificate Files</h3>
+                    <p>Using pre-generated certificate files:</p>
+                    <div class="code-block">
+                        <pre><code class="language-hcl">// Certificate Files (corn format)
+tls = {
+  port = 443
+  config = {
+    files = {
+      keyfile = "/path/to/private.key"
+      certfile = "/path/to/certificate.crt"
+      reload = true
+    }
+  }
+}</code></pre>
+                    </div>
+                </div>
+                
+                <div class="config-box">
+                    <h3><i class="fas fa-cloud"></i> ACME with DNS</h3>
+                    <p>Automatic certificate management via DNS-01 challenge:</p>
+                    <div class="code-block">
+                        <pre><code class="language-hcl">// ACME with DNS (corn format)
+tls = {
+  port = 443
+  config = {
+    acme = {
+      acme_provider = "letsencrypt"
+      contact = "admin@your-domain.com"
+      challenge_type = {
+        type = "dns-01"
+        dns_provider = {
+          name = "porkbun"
+          key = $env_PORKBUN_KEY
+          secret = $env_PORKBUN_SECRET
+        }
+      }
+    }
+  }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="installation" class="section">
+            <h2 class="section-title">Installation</h2>
+            
+            <h3>Building from Source</h3>
+            <div class="code-block">
+                <pre><code class="language-bash">git clone https://github.com/tarka/vicarian.git
+cd vicarian
+cargo build --release</code></pre>
+            </div>
+            <p>The binary will be available at <code>target/release/vicarian</code></p>
+            
+            <h3>Systemd Service</h3>
+            <p>An example systemd service is provided in <code>systemd/vicarian.service</code>. The systemd service sets the <code>CAP_NET_BIND_SERVICE</code> flag which allows binding to ports 80/443 without root.</p>
+        </section>
+
+        <footer>
+            <p><i class="fas fa-code"></i> Vicarian - Reverse Proxy with ACME Support</p>
+            <p>This project is licensed under the Apache License 2.0</p>
+            <p class="license">See <a href="LICENSE" style="color: #4dabf7;">LICENSE</a> for details</p>
+            
+            <div style="margin-top: 20px;">
+                <a href="https://github.com/tarka/vicarian" target="_blank" class="btn btn-outline">
+                    <i class="fab fa-github"></i> GitHub Repository
+                </a>
+                <a href="https://crates.io/crates/vicarian" target="_blank" class="btn btn-outline">
+                    <i class="fas fa-cube"></i> Crates.io
+                </a>
+                <a href="CONFIGURATION.md" class="btn btn-outline">
+                    <i class="fas fa-book"></i> Configuration Docs
+                </a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Arborium syntax highlighting -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/@arborium/arborium/dist/arborium.iife.js"
+        data-theme="github-dark"
+        data-selector="pre code"
+    ></script>
+</body>
+</html>
