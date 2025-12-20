@@ -64,36 +64,45 @@ language. The default configuration file is located at
 
 ### Basic Configuration Structure
 
+The full configuration structure is documented in
+[CONFIGURATION.md](CONFIGURATION.md), and additional examples are available in
+the `examples` directory, but a basic working configuration with HTTP-based
+Let's Encrypt TLS would look like:
+
 ```corn
 {
   hostname = "your-domain.com"
   listen = "[::]"  // Listen on all interfaces (IPv4 & IPv6)
 
   insecure = {
-      port = 80    // HTTP port
+      port = 80    // HTTP port (default)
       redirect = true  // Redirect HTTP to HTTPS
   }
 
   tls = {
-    port = 443  // HTTPS port
+    port = 443  // HTTPS port (default)
     config = {
-      // Choose either 'files' or 'acme'
-      files = {
-        keyfile = "/path/to/your/private-key.pem"
-        certfile = "/path/to/your/certificate.pem"
-        reload = true  // Watch for certificate changes
+      acme = {
+        acme_provider = "letsencrypt"
+        contact = "admin@your-domain.com"
+        challenge_type = {
+          type = "http-01"
+        }
       }
     }
   }
 
   backends = [
     {
-      context = "/service1"
-      url = "http://localhost:8080"
+      context = "/"
+      url = "http://localhost:8443"
+      // This service enforces TLS with a self-signed cert, so
+      // we need to disable certificate verification.
+      trust = true
     }
     {
-      context = "/service2"
-      url = "http://localhost:8081"
+      context = "/copyparty"
+      url = "http://localhost:9090"
     }
   ]
 }

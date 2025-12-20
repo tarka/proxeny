@@ -1,6 +1,8 @@
 # Vicarian Configuration Documentation
 
-Vicarian's configuration is defined in a [Corn](https://cornlang.dev) file, typically named `vicarian.corn`. This file defines how the proxy should behave, including TLS settings, backend services, and routing.
+Vicarian's configuration is defined in a [Corn](https://cornlang.dev) file, by
+default in `/etc/vicarian/vicarian.corn`. This file defines how the proxy should
+behave, including TLS settings, backend services, and routing.
 
 ## Basic Structure
 
