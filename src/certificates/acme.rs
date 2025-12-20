@@ -1,8 +1,8 @@
-use std::{fs::create_dir_all, iter, net::SocketAddr, sync::Arc, time::Duration};
+use std::{fs::create_dir_all, iter, net::SocketAddr, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use camino::Utf8PathBuf;
-use chrono::Utc;
+use chrono::{TimeDelta, Utc};
 use dnsclient::{UpstreamServer, r#async::DNSClient};
 use instant_acme::{
     Account, AccountCredentials, AuthorizationStatus, ChallengeHandle, ChallengeType, Identifier,
@@ -25,8 +25,10 @@ use crate::{
 const LE_PROFILE: &str = "shortlived";
 const _EXPIRY_WINDOW_DAYS: i64 = 30;
 const _EXPIRY_WINDOW_SECS: i64 = _EXPIRY_WINDOW_DAYS * 24 * 60 * 60;
-const EXPIRY_WINDOW_SHORTLIVED_DAYS: u64 = 6;
-const EXPIRY_WINDOW_SHORTLIVED_SECS: u64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 60 * 60;
+const EXPIRY_WINDOW_SHORTLIVED_DAYS: i64 = 6;
+const EXPIRY_WINDOW_SHORTLIVED_SECS: i64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 60 * 60;
+
+const ONE_SECOND: TimeDelta = TimeDelta::new(1, 0).unwrap();
 
 struct AcmeHost {
     fqdn: String,
@@ -149,7 +151,8 @@ impl AcmeRuntime {
         loop {
             let next = self.certstore.next_expiring_secs()
                 .map(|s| (s - EXPIRY_WINDOW_SHORTLIVED_SECS).max(0))
-                .map(|s| tokio::time::Duration::from_secs(s));
+                .map(|s| TimeDelta::new(s, 0))
+                .flatten();
             if let Some(d) = next {
                 let dt = Utc::now() + d;
                 info!("Wait for next expiry at {dt}");
@@ -159,7 +162,7 @@ impl AcmeRuntime {
             }
 
             tokio::select! {
-                _ = tokio::time::sleep(next.unwrap()), if next.is_some() => {
+                _ = tokio::time::sleep(next.unwrap().to_std()?), if next.is_some() => {
                     info!("Woken up for ACME renewal; processing all pending certs");
                     self.renew_all_pending().await?;
                 }
@@ -217,7 +220,7 @@ impl AcmeRuntime {
             // Either None or expiring within window.
             // TODO: This could use renewal_info() in instant-acme.
             .filter(|ah| ! self.certstore.by_host(&ah.fqdn)
-                    .is_some_and(|cert| ! cert.is_expiring_in(EXPIRY_WINDOW_SHORTLIVED_DAYS)))
+                    .is_some_and(|cert| ! cert.is_expiring_in_secs(EXPIRY_WINDOW_SHORTLIVED_DAYS)))
             .collect()
     }
 
@@ -451,7 +454,7 @@ async fn wait_for_dns(txt_fqdn: &String) -> Result<()> {
             info!("Found {txt_fqdn}");
             return Ok(());
         }
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(ONE_SECOND.to_std()?).await;
     }
 
     Err(anyhow!("Failed to find record {txt_fqdn} in public DNS"))

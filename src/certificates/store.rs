@@ -118,12 +118,12 @@ impl CertStore {
             .collect()
     }
 
-    pub fn next_expiring_secs(&self) -> Option<u64> {
+    pub fn next_expiring_secs(&self) -> Option<i64> {
         let pin = self.by_host.pin();
         pin.values()
-            .map(|hc| hc.expires_in())
+            .map(|hc| hc.expires_in_secs())
             .sorted()
             .next()
-            .map(|s| s.max(0) as u64)
+            .map(|s| s.max(0))
     }
 }

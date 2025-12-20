@@ -18,7 +18,7 @@ use boring::{
     x509::GeneralNameRef,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 
 use futures::future::try_join_all;
 use itertools::Itertools;
@@ -92,15 +92,15 @@ impl HostCertificate {
         HostCertificate::new(hc.keyfile.clone(), hc.certfile.clone(), hc.watch)
     }
 
-    pub fn expires_in(&self) -> i64 {
+    pub fn expires_in_secs(&self) -> i64 {
         let now = Utc::now();
         let diff = self.expires - now;
         diff.num_seconds()
     }
 
-    pub fn is_expiring_in(&self, days: u64) -> bool {
-        let in_days = Utc::now() + Duration::days(days as i64);
-        in_days >= self.expires
+    pub fn is_expiring_in_secs(&self, secs: i64) -> bool {
+        let in_secs = Utc::now() + TimeDelta::seconds(secs);
+        in_secs >= self.expires
     }
 }
 
