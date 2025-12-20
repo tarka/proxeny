@@ -81,7 +81,7 @@ pub enum AcmeChallenge {
 pub struct TlsAcmeConfig {
     #[serde(default)]
     pub acme_provider: AcmeProvider,
-    pub challenge_type: AcmeChallenge,
+    pub challenge: AcmeChallenge,
     // TODO: Need a method to default Utf8PathBuf here.
     #[serde_inline_default("/var/lib/vicarian/acme".to_string())]
     pub directory: String,

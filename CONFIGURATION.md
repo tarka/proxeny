@@ -13,21 +13,20 @@ A typical vicarian configuration file includes the following top-level fields:
   hostname = "example.com"
   listen = "[::]"
   
+  // Vicarian does not enable non-TLS by default
   insecure = {
-    port = 80
-    redirect = true
+    port = 80  // Default
+    redirect = true  // Redirect to TLS
   }
   
   tls = {
-    port = 443
+    port = 443  // Default
     config = {
       // Or `files` for existing certificates.
       acme = {
         acme_provider = "letsencrypt"
         contact = "admin@example.com"
-        challenge_type = {
-          type = "http-01"  // `dns-01` is also possible
-        }
+        challenge.type = "http-01" // `dns-01` is also supported, see below
       }
     }
   }
@@ -119,9 +118,7 @@ tls = {
     acme = {
       acme_provider = "letsencrypt"
       contact = "admin@example.com"
-      challenge_type = {
-        type = "http-01"  // or "http-01"
-      }
+      challenge.type = "http-01"
     }
   }
 }
@@ -136,7 +133,7 @@ tls = {
     acme = {
       acme_provider = "letsencrypt"
       contact = "admin@example.com"
-      challenge_type = {
+      challenge = {
         type = "dns-01"  // or "http-01"
         dns_provider = {
           name = "porkbun"

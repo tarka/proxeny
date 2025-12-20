@@ -13,9 +13,7 @@
           acme = {
             acme_provider = "letsencrypt"
             contact = "admin@example.com"
-            challenge_type = {
-              type = "http-01"
-            }
+            challenge.type = "http-01"
           }
         }
       }
@@ -23,7 +21,7 @@
       backends = [
         {
           // A service that does not allow a custom root/context,
-          // so we must place at root. 
+          // so we must place at root.
           context = "/"
           url = "http://localhost:8443"
           // This service enforces TLS with a self-signed cert, so

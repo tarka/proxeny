@@ -39,7 +39,7 @@ struct AcmeHost {
     contactfile: Utf8PathBuf,
     keyfile: Utf8PathBuf,
     certfile: Utf8PathBuf,
-    challenge_type: AcmeChallenge,
+    challenge: AcmeChallenge,
 }
 
 impl AcmeHost {
@@ -117,7 +117,7 @@ impl AcmeRuntime {
                     certfile,
                     contact,
                     contactfile,
-                    challenge_type: aconf.challenge_type.clone(),
+                    challenge: aconf.challenge.clone(),
                 };
                 Ok(acme_host)
             })
@@ -273,8 +273,8 @@ impl AcmeRuntime {
 
             info!("Creating challenge");
             let mut challenge = auth
-                .challenge(ChallengeType::from(&acme_host.challenge_type))
-                .ok_or_else(|| anyhow!("No {:?} challenge found", acme_host.challenge_type))?;
+                .challenge(ChallengeType::from(&acme_host.challenge))
+                .ok_or_else(|| anyhow!("No {:?} challenge found", acme_host.challenge))?;
 
             // As DNS providers generally don't allow concurrent
             // updates to a zone we need to process these series.
@@ -346,7 +346,7 @@ impl AcmeRuntime {
     }
 
     async fn provision_challenge(&self, acme_host: &AcmeHost, challenge: &ChallengeHandle<'_>) -> Result<()> {
-        match &acme_host.challenge_type {
+        match &acme_host.challenge {
             AcmeChallenge::Dns01(provider) => {
 
                 let fqdn = challenge.identifier().to_string();
@@ -377,7 +377,7 @@ impl AcmeRuntime {
     }
 
     async fn cleanup_provisioning(&self, acme_host: &AcmeHost) {
-        match &acme_host.challenge_type {
+        match &acme_host.challenge {
             AcmeChallenge::Dns01(provider) => {
                 for hostname in acme_host.hostnames() {
                     let txt_name = match self.to_txt_name(acme_host, hostname) {

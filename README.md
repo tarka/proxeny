@@ -85,7 +85,7 @@ Let's Encrypt TLS would look like:
       acme = {
         acme_provider = "letsencrypt"
         contact = "admin@your-domain.com"
-        challenge_type = {
+        challenge = {
           type = "http-01"
         }
       }
@@ -128,7 +128,7 @@ To use automatic certificate management with Let's Encrypt:
       acme = {
         acme_provider = "letsencrypt"
         contact = "admin@your-domain.com"
-        challenge_type = {
+        challenge = {
           type = "dns-01"
           domain = "your-domain.com"
           dns_provider = {

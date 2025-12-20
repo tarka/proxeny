@@ -14,7 +14,7 @@ fn test_tls_files_example_config() -> Result<()> {
             reload: true,
         })));
 
-    assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
+    assert_eq!("/", config.backends[0].context.as_ref().unwrap());
 
     Ok(())
 }
@@ -25,19 +25,19 @@ fn test_dns01_example_config() -> Result<()> {
     let config = Config::from_file(&file)?;
     assert_eq!("files.example.com", config.hostname);
 
-    assert_eq!(8443, config.tls.port);
+    assert_eq!(443, config.tls.port);
     assert!(matches!(&config.tls.config, TlsConfigType::Acme(
         TlsAcmeConfig {
             contact: _,
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
-            challenge_type: AcmeChallenge::Dns01(DnsProvider {
+            challenge: AcmeChallenge::Dns01(DnsProvider {
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
 
         })));
 
-    assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
+    assert_eq!("/", config.backends[0].context.as_ref().unwrap());
 
     Ok(())
 }
@@ -48,17 +48,17 @@ fn test_http01_example_config() -> Result<()> {
     let config = Config::from_file(&file)?;
     assert_eq!("www.example.com", config.hostname);
 
-    assert_eq!(8443, config.tls.port);
+    assert_eq!(443, config.tls.port);
     assert!(matches!(&config.tls.config, TlsConfigType::Acme(
         TlsAcmeConfig {
             contact: _,
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
-            challenge_type: AcmeChallenge::Http01,
+            challenge: AcmeChallenge::Http01,
 
         })));
 
-    assert_eq!("/paperless", config.backends[0].context.as_ref().unwrap());
+    assert_eq!("/copyparty", config.backends[1].context.as_ref().unwrap());
 
     Ok(())
 }
@@ -69,6 +69,7 @@ fn test_no_optionals() -> Result<()> {
     let config = Config::from_file(&file)?;
     assert_eq!("host01.example.com", config.hostname);
 
+    assert_eq!(443, config.tls.port);
     assert!(matches!(&config.tls.config, TlsConfigType::Files(
         TlsFilesConfig {
             keyfile: _,
@@ -111,13 +112,13 @@ fn test_dns01_dev_config() -> Result<()> {
     assert_eq!("www.vicarian.org", config.hostname);
     assert_eq!("staging.vicarian.org", config.aliases[0]);
 
-    assert_eq!(8443, config.tls.port);
+    assert_eq!(443, config.tls.port);
     assert!(matches!(&config.tls.config, TlsConfigType::Acme(
         TlsAcmeConfig {
             contact: _,
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
-            challenge_type: AcmeChallenge::Dns01(DnsProvider {
+            challenge: AcmeChallenge::Dns01(DnsProvider {
                 dns_provider: zone_update::Provider::Cloudflare(_)
             }),
 

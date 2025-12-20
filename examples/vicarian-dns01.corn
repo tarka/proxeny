@@ -20,7 +20,7 @@ let {
           acme = {
             acme_provider = "letsencrypt"
             contact = "admin@example.com"
-            challenge_type = {
+            challenge = {
               type = "dns-01"
               dns_provider = {
                 name = "porkbun"
