@@ -1,41 +1,37 @@
-
-let {
-    $env_PORKBUN_KEY = "fallback value"
-    $env_PORKBUN_SECRET = "fallback value"
-
-} in {
-
+{
       hostname = "www.example.com"
       listen = "[::]"  // This covers IPv4 & IPv6
 
       insecure = {
-          port = 8080 // Default should be 80(?)
+          port = 80
           redirect = true
-          // TODO: response.acme = { .. }
       }
 
       tls = {
-        port = 8443 // Default should be 443
+        port = 443
         config = {
-          // `files` or `acme`
           acme = {
             acme_provider = "letsencrypt"
             contact = "admin@example.com"
-            directory = "/var/lib/my_rundir/acme"
             challenge_type = {
               type = "http-01"
             }
           }
-
         }
-               }
+      }
 
       backends = [
         {
-          context = "/paperless"
-          url = "http://localhost:8080"
+          // A service that does not allow a custom root/context,
+          // so we must place at root. 
+          context = "/"
+          url = "http://localhost:8443"
+          // This service enforces TLS with a self-signed cert, so
+          // we need to disable certificate verification.
+          trust = true
         }
         {
+          // A better behaved service that allows a custom root.
           context = "/copyparty"
           url = "http://localhost:9090"
         }
