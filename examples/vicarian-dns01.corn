@@ -4,49 +4,49 @@ let {
     $env_PORKBUN_SECRET = "fallback value"
 
 } in {
-      hostname = "files.example.com"
-      listen = "[::]"  // This covers IPv4 & IPv6
+    hostname = "files.example.com"
+    listen = "[::]"  // Default; this covers IPv4 & IPv6
 
-      insecure = {
-          port = 80 // Default should be 80(?)
-          redirect = true
-          // TODO: response.acme = { .. }
-      }
+    insecure = {
+        port = 80 // Default
+        redirect = true
+    }
 
-      tls = {
+    tls = {
         port = 443
         config = {
-          // `files` or `acme`
-          acme = {
-            acme_provider = "letsencrypt"
-            contact = "admin@example.com"
-            challenge = {
-              type = "dns-01"
-              dns_provider = {
-                name = "porkbun"
-                key = $env_PORKBUN_KEY
-                secret = $env_PORKBUN_SECRET
-              }
+            acme = {
+                acme_provider = "letsencrypt"  // Default & only supported provider ATM
+                contact = "admin@example.com"
+                challenge = {
+                    type = "dns-01"
+                    dns_provider = {
+                        name = "porkbun"
+                        key = $env_PORKBUN_KEY
+                        secret = $env_PORKBUN_SECRET
+                    }
+                }
             }
-          }
 
         }
-      }
+    }
 
-      backends = [
+    backends = [
         {
-          // A service that does not allow a custom root/context,
-          // so we must place at root. 
-          context = "/"
-          url = "http://localhost:8443"
-          // This service enforces TLS with a self-signed cert, so
-          // we need to disable certificate verification.
-          trust = true
+            // A service that does not allow a custom root/context,
+            // so we must place at root. 
+            context = "/"
+            url = "http://localhost:8443"
+            // This service enforces TLS with a self-signed cert, so
+            // we need to disable certificate verification.
+            //
+            // Looking at you Unifi Controller.
+            trust = true
         }
         {
-          // A better behaved service that allows a custom root.
-          context = "/copyparty"
-          url = "http://localhost:9090"
+            // A better behaved service that allows a custom root.
+            context = "/copyparty"
+            url = "http://localhost:9090"
         }
-      ]
+    ]
 }
