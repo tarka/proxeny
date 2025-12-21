@@ -229,7 +229,7 @@ impl AcmeRuntime {
             // Either None or expiring within window.
             // TODO: This could use renewal_info() in instant-acme.
             .filter(|ah| ! self.certstore.by_host(&ah.fqdn)
-                    .is_some_and(|cert| ! cert.is_expiring_in_secs(EXPIRY_WINDOW_SHORTLIVED_DAYS)))
+                    .is_some_and(|cert| ! cert.is_expiring_in_secs(EXPIRY_WINDOW_SHORTLIVED_SECS)))
             .collect()
     }
 
