@@ -1,12 +1,6 @@
 name: "Release-plz PR Generation"
 
-on:
-  workflow_dispatch:
-    inputs:
-      force_update:
-        description: 'Set to true to force update the release PR'
-        required: false
-        default: false
+on: workflow_dispatch
 
 jobs:
   release-plz-pr:
