@@ -70,7 +70,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
           tar: all
-          archive: $bin-$tag-${{ shortarch }}
+          archive: $bin-$tag-${{ matrix.shortarch }}
           leading-dir: true
           bin-leading-dir: bin
           include: LICENSE,README.md,etc
