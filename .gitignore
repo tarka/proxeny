@@ -1,7 +1,5 @@
-/target
-/tests/data/certs/external
-!/tests/data/certs/external/README.txt
-/.idea
+/target/
+.idea
 \#*\#
 /*.corn
 .envrc
