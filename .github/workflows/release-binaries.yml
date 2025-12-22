@@ -30,8 +30,8 @@ jobs:
         include:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
-          # - target: aarch64-apple-darwin
-          #   os: macos-14
+          - target: aarch64-apple-darwin
+            os: macos-14
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
           # - target: x86_64-unknown-freebsd
@@ -44,14 +44,6 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-      # - uses: taiki-e/setup-cross-toolchain-action@v1
-      #   with:
-      #     target: ${{ matrix.target }}
-      #   if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.target, '-musl')
-      # - uses: taiki-e/install-action@v2
-      #   with:
-      #     tool: cross
-      #   if: contains(matrix.target, '-musl')
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: vicarian
