@@ -38,6 +38,14 @@ resources.
 
 ## Installation
 
+### Install from crates.io
+
+```bash
+cargo install vicarian
+```
+
+The binary will be available at `~/.crates/bin/vicarian`.
+
 ### Building from Source
 
 ```bash
