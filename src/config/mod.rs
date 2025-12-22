@@ -48,7 +48,6 @@ where
     Ok(cpath)
 }
 
-
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AcmeProvider {
