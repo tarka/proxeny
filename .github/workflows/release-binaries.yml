@@ -52,6 +52,7 @@ jobs:
           tool: cross
         if: contains(matrix.target, '-musl')
       - uses: taiki-e/upload-rust-binary-action@v1
+        continue-on-error: true
         with:
           bin: vicarian
           target: ${{ matrix.target }}
