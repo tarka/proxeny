@@ -22,13 +22,18 @@ use crate::{
     config::{AcmeChallenge, DnsProvider, TlsConfigType},
 };
 
+// TODO: Configurable profiles?
 const LE_PROFILE: &str = "shortlived";
 const _EXPIRY_WINDOW_DAYS: i64 = 30;
 const _EXPIRY_WINDOW_SECS: i64 = _EXPIRY_WINDOW_DAYS * 24 * 60 * 60;
 const EXPIRY_WINDOW_SHORTLIVED_DAYS: i64 = 6;
 const EXPIRY_WINDOW_SHORTLIVED_SECS: i64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 60 * 60;
 
+// TODO: Increase fuzz range depending on profile
+const FUZZY_RANGE: (i64, i64) = (30, 120);
+
 const ONE_SECOND: TimeDelta = TimeDelta::new(1, 0).unwrap();
+
 
 #[derive(Debug)]
 struct AcmeHost {
@@ -160,10 +165,16 @@ impl AcmeRuntime {
                 .map(|s| TimeDelta::new(s, 0))
                 .flatten();
             let expiring_secs = if let Some(seconds) = next_secs {
-                let local: DateTime<Local> = DateTime::from(Utc::now() + seconds);
+                let fuzzy = {
+                    let rand = fastrand::i64(FUZZY_RANGE.0..FUZZY_RANGE.1);
+                    seconds + TimeDelta::seconds(rand)
+                };
+                let local: DateTime<Local> = DateTime::from(Utc::now() + fuzzy);
                 let fmt = local.format("%Y-%m-%d %H:%M:%S %z");
                 info!("Wait for next expiry at {fmt}");
-                seconds
+
+                fuzzy
+
             } else {
                 let msg = "Nothing expiring; this shouldn't really happen. Exiting.";
                 warn!("{msg}");

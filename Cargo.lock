@@ -3795,6 +3795,7 @@ dependencies = [
  "clap 4.5.53",
  "ctor",
  "dnsclient",
+ "fastrand",
  "futures",
  "http",
  "http-serde",
