@@ -1,15 +1,20 @@
 name: "Release-plz Release"
 
+# on:
+#   push:
+#     branches:
+#       - master
+
 on:
-  push:
-    branches:
-      - master
+  pull_request:
+    types:
+      - closed
 
 jobs:
   release-plz-release:
     name: Release-plz release
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'tarka' }}
+    if: ${{ github.repository_owner == 'tarka' && github.event.pull_request.merged == true }}
     permissions:
       contents: write
       id-token: write
