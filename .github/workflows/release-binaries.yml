@@ -25,10 +25,11 @@ jobs:
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04
+          # - target: aarch64-unknown-linux-gnu
+          #   os: ubuntu-22.04
           # - target: aarch64-apple-darwin
           #   os: macos-14
           - target: x86_64-unknown-linux-gnu
@@ -52,7 +53,6 @@ jobs:
           tool: cross
         if: contains(matrix.target, '-musl')
       - uses: taiki-e/upload-rust-binary-action@v1
-        continue-on-error: true
         with:
           bin: vicarian
           target: ${{ matrix.target }}
