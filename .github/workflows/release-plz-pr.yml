@@ -1,6 +1,7 @@
+
 name: "Release-plz PR Generation"
 
-on: workflow_dispatch
+#on: workflow_dispatch
 
 jobs:
   release-plz-pr:
