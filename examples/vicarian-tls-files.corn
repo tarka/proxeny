@@ -12,8 +12,8 @@
         port = 8443 // Default is 443
         config = {
           files = {
-            keyfile = "tests/data/certs/snakeoil.key"
-            certfile = "tests/data/certs/snakeoil.crt"
+            keyfile = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
+            certfile = "/etc/ssl/private/ssl-cert-snakeoil.key"
             reload = true
           }
         }

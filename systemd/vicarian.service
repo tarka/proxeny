@@ -9,7 +9,7 @@ Restart=on-abnormal
 User=www-data
 Group=www-data
 
-EnvironmentFile=-/etc/vicarian/env
+EnvironmentFile=-/etc/vicarian/secrets
 StateDirectory=vicarian
 StateDirectoryMode=0750
 ConfigurationDirectory=vicarian
