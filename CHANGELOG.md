@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/tarka/vicarian/compare/v0.1.4...v0.1.5) - 2025-12-22
+
+### Other
+
+- Try only running release on PR merge.
+- Disable Mac & FreeBSD binaries for now until we have testing for them in place.
+
 ## [0.1.4](https://github.com/tarka/vicarian/compare/v0.1.3...v0.1.4) - 2025-12-22
 
 ### Other
