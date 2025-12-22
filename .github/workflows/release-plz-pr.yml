@@ -1,16 +1,35 @@
 
 name: "Release-plz PR Generation"
 
-#on: workflow_dispatch
+on: workflow_dispatch
 
 jobs:
+  # release-plz-pr:
+  #   name: Release-plz PR
+  #   runs-on: ubuntu-latest
+  #   if: ${{ github.repository_owner == 'tarka' }}
+  #   permissions:
+  #     pull-requests: write
+  #     contents: write
+  #   concurrency:
+  #     group: release-plz-${{ github.ref }}
+  #     cancel-in-progress: false
+  #   steps:
+  #     - *checkout
+  #     - *install-rust
+  #     - name: Run release-plz
+  #       uses: release-plz/action@v0.5
+  #       with:
+  #         command: release-pr
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'tarka' }}
     permissions:
-      pull-requests: write
       contents: write
+      pull-requests: write
     concurrency:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
@@ -19,7 +38,7 @@ jobs:
       - *install-rust
       - name: Run release-plz
         uses: release-plz/action@v0.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
         with:
           command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
