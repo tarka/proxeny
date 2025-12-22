@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/tarka/vicarian/compare/v0.1.5...v0.1.6) - 2025-12-22
+
+### Other
+
+- Continue building other binaries if one fails.
+- Remove musl as it doesn't work with non-GNU libc
+
 ## [0.1.5](https://github.com/tarka/vicarian/compare/v0.1.4...v0.1.5) - 2025-12-22
 
 ### Other
