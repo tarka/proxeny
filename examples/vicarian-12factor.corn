@@ -1,0 +1,35 @@
+
+let {
+    $env_VICARIAN_LISTEN = "[::]"
+    $env_VICARIAN_INSECURE_PORT = 80
+    $env_VICARIAN_TLS_PORT = 443
+
+    $env_VICARIAN_BACKEND_CONTEXT = "/"
+    $env_VICARIAN_BACKEND_URL = "http://127.0.0.1:8080/"
+
+} in {
+    listen = $env_VICARIAN_LISTEN
+    insecure = {
+        port = $env_VICARIAN_INSECURE_PORT
+    }
+
+    hostname = $env_VICARIAN_HOSTNAME
+
+    tls = {
+        port = $env_VICARIAN_TLS_PORT
+        config = {
+            acme = {
+                contact = $env_VICARIAN_ACME_CONTACT
+                challenge.type = "http-01"
+            }
+        }
+    }
+
+    backends = [
+        {
+            context = $env_VICARIAN_BACKEND_CONTEXT
+            url = $env_VICARIAN_BACKEND_URL
+        }
+    ]
+
+}
