@@ -1,4 +1,5 @@
-name: Release-plz-Pr
+---
+name: "Release-plz PR Generation"
 
 on:
   workflow_dispatch:
@@ -9,7 +10,6 @@ on:
         default: 'false'
 
 jobs:
-
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest
