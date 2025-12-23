@@ -12,6 +12,7 @@ readme = "README.md"
 keywords = ["proxy", "https", "reverse-proxy", "pingora"]
 categories = ["web-programming::http-server", "network-programming"]
 license = "Apache-2.0"
+rust-version = "1.88.0"
 
 [dependencies]
 anyhow = "1.0.100"
