@@ -17,7 +17,7 @@ use std::{
 use anyhow::Result;
 use boring::asn1::Asn1Time;
 use chrono::TimeZone;
-use rcgen::{CertificateParams, KeyPair};
+use rcgen::{CertificateParams, DistinguishedName, KeyPair};
 use tempfile::{NamedTempFile, tempdir};
 
 // Common test utils
@@ -81,6 +81,7 @@ fn gen_cert(host: &str,
 
 	let key = KeyPair::generate()?;
 	let mut params = CertificateParams::new(sans)?;
+        params.distinguished_name = DistinguishedName::new();
         params.not_before = not_before;
         params.not_after = not_after;
 
@@ -265,7 +266,7 @@ fn test_file_update_success() -> Result<()> {
 
     // The original cert is snakeoil
     let first_cert = store.by_host(&original_host).unwrap();
-    assert!(first_cert.certs[0].subject_name().print_ex(0).unwrap().contains("vicarian.example.com"));
+    assert_eq!("vicarian.example.com", first_cert.hostnames[0]);
 
     // Now update the files to snakeoil-2
     let cert = TEST_CERTS.vicarian_ss2.clone();
