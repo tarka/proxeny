@@ -34,8 +34,9 @@ jobs:
         prepare: |
           pkg install -y curl cmake
           pw user add -n testing -m
-        run: su testing -c 'curl -sSf https://sh.rustup.rs | sh /dev/stdin -y'
-        run: su testing -c '~/.cargo/bin/cargo test --workspace'
+        run: |
+          su testing -c 'curl -sSf https://sh.rustup.rs | sh /dev/stdin -y \
+          && ~/.cargo/bin/cargo test --workspace'
 
   msrv-check:
     runs-on: ubuntu-latest
