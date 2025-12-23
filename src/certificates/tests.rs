@@ -85,8 +85,9 @@ fn gen_cert(host: &str,
             .arg("-out").arg(&certfile)
             .arg("-keyout").arg(&keyfile)
             .arg("-subj").arg(format!("/CN={host}"))
-            .output()?;
-        info!("OPENSSL: {out:#?}");
+            .output();
+        println!("OPENSSL: {out:#?}");
+        out?;
     }
 
     let host_certificate = HostCertificate::new(keyfile, certfile, watch)?;
