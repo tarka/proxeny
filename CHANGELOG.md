@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12](https://github.com/tarka/vicarian/compare/v0.1.11...v0.1.12) - 2025-12-23
+
+### Other
+
+- Change the shortlived renewal window to something sensible.
+- Also disable Mac binaries.
+- Give up on trying to make FreeBSD & MacOS work for now.
+- Correct import.
+- Missing import for mac
+- Use pollwatcher on Mac.
+- More workflow fixes.
+- Tweaks to FreeBSD testing script.
+- Allow default features on notify to enable mac events.
+- Be more explicit about test certs
+- Override subject default.
+- Use standard ubuntu version.
+- Use rcgen rather than openssl for test certs as openssl versions are all over the place.
+- Try using newer ubuntu
+- Yaml fixes.
+- Yaml fixes.
+- More ssl probes.
+- Find openssl version
+- Typo in workflow.
+- More logging of openssl runs.
+- Add rust caching to unit test build.
+- Remove some unnecessary dev-deps
+- Add MSRV
+- First cut of unit-test workflow.
+- Minor cleanup.
+
 ## [0.1.11](https://github.com/tarka/vicarian/compare/v0.1.10...v0.1.11) - 2025-12-22
 
 ### Other
