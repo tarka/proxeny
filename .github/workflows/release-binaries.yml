@@ -20,8 +20,8 @@ defaults:
 
 jobs:
   upload-assets:
-    name: ${{ matrix.target }}
-    if: github.repository_owner == 'tarka' # && startsWith(github.event.release.name, 'v')
+    name: ${{ matrix.shortname }}
+    if: github.repository_owner == 'tarka'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
