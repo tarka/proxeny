@@ -32,7 +32,7 @@ jobs:
       with:
         usesh: true
         prepare: |
-          pkg install -y curl cmake
+          pkg install -y curl cmake clang
           pw user add -n testing -m
         run: |
           su testing -c 'curl -sSf https://sh.rustup.rs | sh /dev/stdin -y \
