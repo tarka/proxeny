@@ -26,7 +26,7 @@ use crate::{
 const LE_PROFILE: &str = "shortlived";
 const _EXPIRY_WINDOW_DAYS: i64 = 30;
 const _EXPIRY_WINDOW_SECS: i64 = _EXPIRY_WINDOW_DAYS * 24 * 60 * 60;
-const EXPIRY_WINDOW_SHORTLIVED_DAYS: i64 = 6;
+const EXPIRY_WINDOW_SHORTLIVED_DAYS: i64 = 4;
 const EXPIRY_WINDOW_SHORTLIVED_SECS: i64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 60 * 60;
 
 // TODO: Increase fuzz range depending on profile
