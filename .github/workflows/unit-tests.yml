@@ -10,6 +10,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
+      - run: openssl --version
+
       - name: Run tests
         run: cargo test --workspace
 
