@@ -25,7 +25,7 @@ jobs:
  
       - run: openssl -v
 
-     - name: Run all tests
+      - name: Run all tests
         run: cargo test --workspace
 
   freebsd:
