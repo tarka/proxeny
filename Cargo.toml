@@ -30,8 +30,8 @@ instant-acme = { version = "0.8.4", features = ["time"] }
 
 itertools = "0.14.0"
 libcorn = "0.10.0"
-notify = { version = "8.2.0", default-features = false, features = ["crossbeam-channel", "fsevent-sys"] }
-notify-debouncer-full = { version = "0.6.0", default-features = false, features = ["crossbeam-channel"] }
+notify = { version = "8.2.0", features = ["crossbeam-channel"] }
+notify-debouncer-full = { version = "0.6.0", features = ["crossbeam-channel"] }
 papaya = "0.2.3"
 path-tree = "0.8.3"
 pingora-boringssl = "0.6.0"
