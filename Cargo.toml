@@ -57,10 +57,12 @@ integration_tests = []
 ctor = "0.6.3"
 nix = { version = "0.30.1", features = ["process", "signal", "term"] }
 pem = "3.0.6"
+rcgen = "0.14.6"
 reqwest = { version = "0.12.26", features = ["blocking", "rustls-tls"], default-features = false }
 tempfile = "3.23.0"
 test-context = "0.5.4"
 test-log = { version = "0.2.19", features = ["trace"] }
+time = { version = "0.3.44", features = ["macros"] }
 tokio = { version = "1.48.0", features = ["fs"] }
 
 [package.metadata.bacon]

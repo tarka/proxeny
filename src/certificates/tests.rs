@@ -11,13 +11,13 @@ use super::*;
 use std::{
     fs::create_dir_all,
     io::Write,
-    process::Command,
-    sync::LazyLock, time::Duration,
+    sync::LazyLock
 };
 
 use anyhow::Result;
 use boring::asn1::Asn1Time;
-use chrono::{Days, NaiveDate, TimeZone};
+use chrono::TimeZone;
+use rcgen::{CertificateParams, KeyPair};
 use tempfile::{NamedTempFile, tempdir};
 
 // Common test utils
@@ -40,8 +40,9 @@ impl TestCerts {
     fn new() -> Result<Self> {
         create_dir_all(CERT_BASE)?;
 
-        let not_before = Utc::now().date_naive();
-        let not_after = not_before.clone().checked_add_days(Days::new(365)).unwrap();
+        let not_before = time::OffsetDateTime::now_utc();
+        let not_after = not_before.clone()
+            .checked_add(time::Duration::days(365)).unwrap();
 
         let host = "vicarian.example.com";
         let name = "snakeoil-1";
@@ -49,7 +50,8 @@ impl TestCerts {
         let vicarian_ss1 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "snakeoil-2";
-        let not_after = not_before.clone().checked_add_days(Days::new(720)).unwrap();
+        let not_after = not_before.clone()
+            .checked_add(time::Duration::days(720)).unwrap();
         let vicarian_ss2 = gen_cert(host, name, true, not_before, not_after)?;
 
         let name = "www.example.com";
@@ -66,8 +68,8 @@ impl TestCerts {
 fn gen_cert(host: &str,
             name: &str,
             watch: bool,
-            not_before: NaiveDate,
-            not_after: NaiveDate)
+            not_before: time::OffsetDateTime,
+            not_after: time::OffsetDateTime)
             -> Result<Arc<HostCertificate>>
 {
     let base = Utf8PathBuf::try_from(CERT_BASE)?;
@@ -75,19 +77,21 @@ fn gen_cert(host: &str,
     let certfile = base.join(name).with_extension("crt");
 
     if ! (keyfile.exists() && certfile.exists()) {
+        let sans = vec![host.to_string()];
 
-        let out = Command::new("openssl")
-            .arg("req")
-            .arg("-x509")
-            .arg("-noenc")
-            .arg("-not_before").arg(not_before.format("%Y%m%d000000Z").to_string())
-            .arg("-not_after").arg(not_after.format("%Y%m%d000000Z").to_string())
-            .arg("-out").arg(&certfile)
-            .arg("-keyout").arg(&keyfile)
-            .arg("-subj").arg(format!("/CN={host}"))
-            .output();
-        println!("OPENSSL: {out:#?}");
-        out?;
+	let key = KeyPair::generate()?;
+	let mut params = CertificateParams::new(sans)?;
+        params.not_before = not_before;
+        params.not_after = not_after;
+
+        let cert = params.self_signed(&key)?;
+
+        let cert_pem = cert.pem();
+        let key_pem = key.serialize_pem();
+
+        std::fs::write(&keyfile, &key_pem)?;
+        std::fs::write(&certfile, &cert_pem)?;
+
     }
 
     let host_certificate = HostCertificate::new(keyfile, certfile, watch)?;
@@ -181,7 +185,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     });
 
     // Wait for the watcher to start
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Update the files
     println!("Updating cert files");
@@ -190,7 +194,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     fs::copy(&so2.certfile, &cert_path)?;
 
     // Wait for the watcher to process the event
-    tokio::time::sleep(RELOAD_GRACE + Duration::from_millis(500)).await;
+    tokio::time::sleep(RELOAD_GRACE + std::time::Duration::from_millis(500)).await;
 
     info!("Checking updated certs");
     let updated_cert = store.by_host(&original_host).unwrap();
