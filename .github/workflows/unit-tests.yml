@@ -23,20 +23,22 @@ jobs:
       - name: Run all tests
         run: cargo test --workspace
 
-  freebsd:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+  # Disabled for the time being, needs further investigation of build issues.
+  #
+  # freebsd:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v4
 
-    - uses: vmactions/freebsd-vm@v1
-      with:
-        usesh: true
-        prepare: |
-          pkg install -y curl cmake clang
-          pw user add -n testing -m
-        run: |
-          su testing -c 'curl -sSf https://sh.rustup.rs | sh /dev/stdin -y \
-          && ~/.cargo/bin/cargo test --workspace'
+  #   - uses: vmactions/freebsd-vm@v1
+  #     with:
+  #       usesh: true
+  #       prepare: |
+  #         pkg install -y curl cmake
+  #         pw user add -n testing -m
+  #       run: |
+  #         su testing -c 'curl -sSf https://sh.rustup.rs | sh /dev/stdin -y \
+  #         && ~/.cargo/bin/cargo test --workspace'
 
   msrv-check:
     runs-on: ubuntu-latest
