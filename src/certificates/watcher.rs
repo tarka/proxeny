@@ -46,18 +46,7 @@ impl CertWatcher {
             move |ev: DebounceEventResult| { ev_tx.blocking_send(ev).unwrap(); }
         };
 
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "macos")] {
-                use notify::PollWatcher;
-                use notify_debouncer_full::RecommendedCache;
-                // The native watcher doesn't seem to work so revert to pollwatcher.
-                let mut watcher = new_debouncer_opt::<F, PollWatcher, RecommendedCache>(
-                    RELOAD_GRACE, None, handler,
-                    RecommendedCache::new(), notify::Config::default())?;
-            } else {
-                let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, handler)?;
-            }
-        };
+        let mut watcher = debouncer::new_debouncer(RELOAD_GRACE, None, handler)?;
 
         for file in &self.certstore.watchlist() {
             info!("Starting watch of {file}");

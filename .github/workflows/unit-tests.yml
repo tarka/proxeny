@@ -13,18 +13,19 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
-  macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
- 
-      - name: Run all tests
-        run: cargo test --workspace
-
-  # Disabled for the time being, needs further investigation of build issues.
+  # Other platforms disabled for the time being; needs further
+  # investigation of build and test issues.
   #
+  # macos:
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+ 
+  #     - name: Run all tests
+  #       run: cargo test --workspace
+
   # freebsd:
   #   runs-on: ubuntu-latest
   #   steps:

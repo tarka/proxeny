@@ -3784,7 +3784,6 @@ dependencies = [
  "async-trait",
  "boring",
  "camino",
- "cfg-if 1.0.4",
  "chrono",
  "clap 4.5.53",
  "ctor",
