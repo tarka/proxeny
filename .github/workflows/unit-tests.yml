@@ -10,7 +10,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - run: openssl --version
+      - run: |
+          dpkg -l openssl
+          openssl -v
 
       - name: Run tests
         run: cargo test --workspace
@@ -21,8 +23,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+ 
+      - run: |
+          openssl -v
 
-      - name: Run all tests
+     - name: Run all tests
         run: cargo test --workspace
 
   freebsd:
