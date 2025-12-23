@@ -48,7 +48,8 @@ impl CertWatcher {
 
         cfg_if::cfg_if! {
             if #[cfg(target_os = "macos")] {
-                use notify::{PollWatcher, RecommendedCache};
+                use notify::PollWatcher;
+                use notify_debouncer_full::RecommendedCache;
                 // The native watcher doesn't seem to work so revert to pollwatcher.
                 let mut watcher = new_debouncer_opt::<F, PollWatcher, RecommendedCache>(
                     RELOAD_GRACE, None, handler,
