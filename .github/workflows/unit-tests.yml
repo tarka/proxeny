@@ -32,14 +32,10 @@ jobs:
       with:
         usesh: true
         prepare: |
-          pkg install -y curl
+          pkg install -y curl cmake
           pw user add -n testing -m
-        run: |
-          su testing -c '
-            curl -sSf https://sh.rustup.rs | sh /dev/stdin -y \
-              && ~/.cargo/bin/cargo test --workspace \
-              && ~/.cargo/bin/cargo clean
-          '
+        run: su testing -c 'curl -sSf https://sh.rustup.rs | sh /dev/stdin -y'
+        run: su testing -c '~/.cargo/bin/cargo test --workspace'
 
   msrv-check:
     runs-on: ubuntu-latest
