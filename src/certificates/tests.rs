@@ -40,22 +40,33 @@ impl TestCerts {
     fn new() -> Result<Self> {
         create_dir_all(CERT_BASE)?;
 
-        let not_before = time::OffsetDateTime::now_utc();
-        let not_after = not_before.clone()
-            .checked_add(time::Duration::days(365)).unwrap();
+        let vicarian_ss1 = {
+            let not_before = time::OffsetDateTime::now_utc();
+            let not_after = not_before.clone()
+                .checked_add(time::Duration::days(365)).unwrap();
 
-        let host = "vicarian.example.com";
-        let name = "snakeoil-1";
+            let host = "vicarian.example.com";
+            let name = "snakeoil-1";
 
-        let vicarian_ss1 = gen_cert(host, name, true, not_before, not_after)?;
+            gen_cert(host, name, true, not_before, not_after)?
+        };
 
-        let name = "snakeoil-2";
-        let not_after = not_before.clone()
-            .checked_add(time::Duration::days(720)).unwrap();
-        let vicarian_ss2 = gen_cert(host, name, true, not_before, not_after)?;
+        let vicarian_ss2 = {
+            let host = "vicarian.example.com";
+            let name = "snakeoil-2";
+            let not_before = time::OffsetDateTime::now_utc();
+            let not_after = not_before.clone()
+                .checked_add(time::Duration::days(720)).unwrap();
+            gen_cert(host, name, true, not_before, not_after)?
+        };
 
-        let name = "www.example.com";
-        let www_ss = gen_cert(name, name, false, not_before, not_after)?;
+        let www_ss = {
+            let not_before = time::OffsetDateTime::now_utc();
+            let not_after = not_before.clone()
+                .checked_add(time::Duration::days(720)).unwrap();
+            let name = "www.example.com";
+            gen_cert(name, name, false, not_before, not_after)?
+        };
 
         Ok(Self {
             vicarian_ss1,
