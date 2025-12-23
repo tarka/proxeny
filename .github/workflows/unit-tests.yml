@@ -1,0 +1,58 @@
+name: "Unit Tests"
+
+on: [push]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --workspace
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run all tests
+        run: cargo test --workspace
+
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: vmactions/freebsd-vm@v1
+      with:
+        usesh: true
+        prepare: |
+          pkg install -y curl
+          pw user add -n testing -m
+        run: |
+          su testing -c '
+            curl -sSf https://sh.rustup.rs | sh /dev/stdin -y \
+              && ~/.cargo/bin/cargo test --workspace \
+              && ~/.cargo/bin/cargo clean
+          '
+
+  msrv-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MSRV checker
+        run: cargo install cargo-msrv
+
+      - name: Check MSRV
+        run: cargo msrv verify
