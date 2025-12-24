@@ -175,7 +175,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
     let key_path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test.key")).unwrap();
     let cert_path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test.crt")).unwrap();
 
-    let context = Arc::new(RunContext::new(crate::config::Config::empty()));
+    let context = Arc::new(RunContext::new(crate::config::Config::default()));
 
     let so1 = TEST_CERTS.vicarian_ss1.clone();
     fs::copy(&so1.keyfile, &key_path)?;
@@ -225,7 +225,7 @@ async fn test_cert_watcher_file_updates() -> Result<()> {
 fn test_by_host() {
     let cert = TEST_CERTS.vicarian_ss1.clone();
     let certs = vec![cert.clone()];
-    let context = Arc::new(RunContext::new(Config::empty()));
+    let context = Arc::new(RunContext::new(Config::default()));
     let store = CertStore::new(certs, context).unwrap();
     let found = store.by_host(&cert.hostnames[0]).unwrap();
 
@@ -236,7 +236,7 @@ fn test_by_host() {
 fn test_by_file() {
     let cert = TEST_CERTS.vicarian_ss1.clone();
     let certs = vec![cert.clone()];
-    let context = Arc::new(RunContext::new(Config::empty()));
+    let context = Arc::new(RunContext::new(Config::default()));
     let store = CertStore::new(certs, context).unwrap();
     let found = store.by_file(&"target/certs/snakeoil-1.key".into()).unwrap();
 
@@ -248,7 +248,7 @@ fn test_watchlist() -> Result<()> {
     let hc1 = TEST_CERTS.vicarian_ss1.clone();
     let hc2 = TEST_CERTS.www_ss.clone();
 
-    let context = Arc::new(RunContext::new(Config::empty()));
+    let context = Arc::new(RunContext::new(Config::default()));
     let certs = vec![hc1, hc2];
     let store = CertStore::new(certs, context)?;
     let watchlist = store.watchlist();
@@ -271,7 +271,7 @@ fn test_file_update_success() -> Result<()> {
 
 
     let certs = vec![cert.clone()];
-    let context = Arc::new(RunContext::new(Config::empty()));
+    let context = Arc::new(RunContext::new(Config::default()));
     let store = CertStore::new(certs, context)?;
     let original_host = cert.hostnames[0].clone();
 

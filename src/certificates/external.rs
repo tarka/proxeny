@@ -5,8 +5,7 @@ use tracing_log::log::debug;
 
 use crate::{
     RunContext,
-    certificates::HostCertificate,
-    config::TlsConfigType
+    certificates::HostCertificate, config::TlsConfig,
 };
 
 /// Externally managed certificates
@@ -18,12 +17,12 @@ pub struct ExternalProvider {
 
 impl ExternalProvider {
     pub fn new(context: Arc<RunContext>) -> Result<Self> {
-        let certs = context.config.servers().iter()
-            .filter_map(|s| match &s.tls.config {
-                TlsConfigType::Files(tfc) => {
+        let certs = context.config.vhosts.iter()
+            .filter_map(|vhost| match &vhost.tls {
+                TlsConfig::Files(tfc) => {
                     // Wrapper closure for `?` clarity
                     let result = (|| {
-                        debug!("Loading {} certs from {}, {}", s.hostname, tfc.keyfile, tfc.certfile);
+                        debug!("Loading {} certs from {}, {}", vhost.hostname, tfc.keyfile, tfc.certfile);
                         let hostcert = HostCertificate::new(
                             tfc.keyfile.clone(),
                             tfc.certfile.clone(),

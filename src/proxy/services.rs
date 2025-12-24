@@ -157,7 +157,7 @@ pub struct Vicarian {
 
 impl Vicarian {
     pub fn new(_certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
-        let routes_by_host: papaya::HashMap<String, Router> = context.config.servers().iter()
+        let routes_by_host: papaya::HashMap<String, Router> = context.config.vhosts.iter()
             .map(|s| (s.hostname.clone(),
                       Router::new(&s.backends)))
             .collect();

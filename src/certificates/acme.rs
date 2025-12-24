@@ -19,7 +19,7 @@ use zone_update::async_impl::AsyncDnsProvider;
 use crate::{
     RunContext,
     certificates::{HostCertificate, store::CertStore},
-    config::{AcmeChallenge, DnsProvider, TlsConfigType},
+    config::{AcmeChallenge, DnsProvider, TlsConfig},
 };
 
 // TODO: Configurable profiles?
@@ -77,16 +77,16 @@ pub struct ChallengeTokens {
 impl AcmeRuntime {
 
     pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<Self> {
-        let acme_hosts = context.config.servers().iter()
-            .filter_map(|s| match &s.tls.config {
-                TlsConfigType::Files(_) => None, // Handled elsewhere
-                TlsConfigType::Acme(aconf) => Some(aconf),
+        let acme_hosts = context.config.vhosts.iter()
+            .filter_map(|vhost| match &vhost.tls {
+                TlsConfig::Files(_) => None, // Handled elsewhere
+                TlsConfig::Acme(aconf) => Some((vhost, aconf)),
             })
-            .map(|aconf| {
+            .map(|(vhost, aconf)| {
                 // Default;
                 // keyfile  -> /var/lib/vicarian/acme/www.example.com/www.example.com.key
                 // certfile -> /var/lib/vicarian/acme/www.example.com/www.example.com.crt
-                let fqdn = context.config.hostname.clone();
+                let fqdn = vhost.hostname.clone();
 
                 let domain_psl = psl::domain(fqdn.as_bytes())
                     .ok_or(anyhow!("Failed to find base domain for {fqdn}"))?;
@@ -116,7 +116,7 @@ impl AcmeRuntime {
 
                 let acme_host = AcmeHost {
                     fqdn,
-                    aliases: context.config.aliases.clone(),
+                    aliases: vhost.aliases.clone(),
                     domain,
                     keyfile,
                     certfile,

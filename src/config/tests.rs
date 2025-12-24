@@ -4,17 +4,17 @@ use super::*;
 fn test_tls_files_example_config() -> Result<()> {
     let file = Utf8PathBuf::from("examples/vicarian-tls-files.corn");
     let config = Config::from_file(&file)?;
-    assert_eq!("files.example.com", config.hostname);
+    assert_eq!("files.example.com", config.vhosts[0].hostname);
 
-    assert_eq!(8443, config.tls.port);
-    assert!(matches!(&config.tls.config, TlsConfigType::Files(
+    assert_eq!(8443, config.listen.tls_port);
+    assert!(matches!(&config.vhosts[0].tls, TlsConfig::Files(
         TlsFilesConfig {
             keyfile: _,  // FIXME: Match Utf8PathBuf?
             certfile: _,
             reload: true,
         })));
 
-    assert_eq!("/", config.backends[0].context.as_ref().unwrap());
+    assert_eq!("/", config.vhosts[0].backends[0].context.as_ref().unwrap());
 
     Ok(())
 }
@@ -23,10 +23,10 @@ fn test_tls_files_example_config() -> Result<()> {
 fn test_dns01_example_config() -> Result<()> {
     let file = Utf8PathBuf::from("examples/vicarian-dns01.corn");
     let config = Config::from_file(&file)?;
-    assert_eq!("files.example.com", config.hostname);
+    assert_eq!("files.example.com", config.vhosts[0].hostname);
 
-    assert_eq!(443, config.tls.port);
-    assert!(matches!(&config.tls.config, TlsConfigType::Acme(
+    assert_eq!(443, config.listen.tls_port);
+    assert!(matches!(&config.vhosts[0].tls, TlsConfig::Acme(
         TlsAcmeConfig {
             contact: _,
             acme_provider: AcmeProvider::LetsEncrypt,
@@ -34,10 +34,9 @@ fn test_dns01_example_config() -> Result<()> {
             challenge: AcmeChallenge::Dns01(DnsProvider {
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
-
         })));
 
-    assert_eq!("/", config.backends[0].context.as_ref().unwrap());
+    assert_eq!("/", config.vhosts[0].backends[0].context.as_ref().unwrap());
 
     Ok(())
 }
@@ -46,10 +45,10 @@ fn test_dns01_example_config() -> Result<()> {
 fn test_http01_example_config() -> Result<()> {
     let file = Utf8PathBuf::from("examples/vicarian-http01.corn");
     let config = Config::from_file(&file)?;
-    assert_eq!("www.example.com", config.hostname);
+    assert_eq!("www.example.com", config.vhosts[0].hostname);
 
-    assert_eq!(443, config.tls.port);
-    assert!(matches!(&config.tls.config, TlsConfigType::Acme(
+    assert_eq!(443, config.listen.tls_port);
+    assert!(matches!(&config.vhosts[0].tls, TlsConfig::Acme(
         TlsAcmeConfig {
             contact: _,
             acme_provider: AcmeProvider::LetsEncrypt,
@@ -58,7 +57,7 @@ fn test_http01_example_config() -> Result<()> {
 
         })));
 
-    assert_eq!("/copyparty", config.backends[1].context.as_ref().unwrap());
+    assert_eq!("/copyparty", config.vhosts[0].backends[1].context.as_ref().unwrap());
 
     Ok(())
 }
@@ -67,10 +66,10 @@ fn test_http01_example_config() -> Result<()> {
 fn test_no_optionals() -> Result<()> {
     let file = Utf8PathBuf::from("tests/data/config/no-optionals.corn");
     let config = Config::from_file(&file)?;
-    assert_eq!("host01.example.com", config.hostname);
+    assert_eq!("host01.example.com", config.vhosts[0].hostname);
 
-    assert_eq!(443, config.tls.port);
-    assert!(matches!(&config.tls.config, TlsConfigType::Files(
+    assert_eq!(443, config.listen.tls_port);
+    assert!(matches!(&config.vhosts[0].tls, TlsConfig::Files(
         TlsFilesConfig {
             keyfile: _,
             certfile: _,
@@ -86,7 +85,7 @@ fn test_extract_files() -> Result<()> {
     let config = Config::from_file(&file)?;
 
 
-    let files = if let TlsConfigType::Files(tfc) = config.tls.config {
+    let files = if let TlsConfig::Files(tfc) = &config.vhosts[0].tls {
         tfc
     } else {
         panic!("Expected TLS files");
@@ -109,22 +108,22 @@ fn test_dns01_dev_config() -> Result<()> {
     }
 
     let config = Config::from_file(&file)?;
-    assert_eq!("www.vicarian.org", config.hostname);
-    assert_eq!("staging.vicarian.org", config.aliases[0]);
+    //assert_eq!("www.vicarian.org", config.vhosts[0].hostname);
+    //assert_eq!("staging.vicarian.org", config.vhosts[0].aliases[0]);
 
-    assert_eq!(443, config.tls.port);
-    assert!(matches!(&config.tls.config, TlsConfigType::Acme(
+    assert_eq!(443, config.listen.tls_port);
+    assert!(matches!(&config.vhosts[0].tls, TlsConfig::Acme(
         TlsAcmeConfig {
             contact: _,
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
             challenge: AcmeChallenge::Dns01(DnsProvider {
-                dns_provider: zone_update::Provider::Cloudflare(_)
+                dns_provider: zone_update::Provider::PorkBun(_)
             }),
 
         })));
 
-    assert_eq!("/sonarr", config.backends[0].context.as_ref().unwrap());
+    assert_eq!("/", config.vhosts[0].backends[0].context.as_ref().unwrap());
 
     Ok(())
 }

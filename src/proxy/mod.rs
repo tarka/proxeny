@@ -41,19 +41,18 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, acme: Arc<AcmeRuntime>, conte
         let tls_settings = TlsSettings::with_callbacks(Box::new(cert_handler))?;
 
         // TODO: Listen on specific IP/interface
-        let addr = format!("{}:{}", context.config.listen, context.config.tls.port);
+        let addr = format!("{}:{}", context.config.listen.addr, context.config.listen.tls_port);
         pingora_proxy.add_tls_with_settings(&addr, None, tls_settings);
         pingora_proxy
     };
     pingora_server.add_service(tls_proxy);
 
-
-    if let Some(insecure) = &context.config.insecure
+    if let Some(insecure) = &context.config.vhosts[0].insecure // FIXME
         && insecure.redirect
     {
-        let redirector = CleartextHandler::new(acme, context.config.tls.port);
+        let redirector = CleartextHandler::new(acme, context.config.listen.tls_port);
         let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
-        let addr = format!("{}:{}", context.config.listen, insecure.port);
+        let addr = format!("{}:{}", context.config.listen.addr, context.config.listen.insecure_port);
         service.add_tcp(&addr);
         pingora_server.add_service(service);
     };
