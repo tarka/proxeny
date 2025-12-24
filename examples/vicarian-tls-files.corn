@@ -15,12 +15,10 @@
             }
 
             tls = {
-                config = {
-                    files = {
-                        keyfile = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
-                        certfile = "/etc/ssl/private/ssl-cert-snakeoil.key"
-                        reload = true
-                    }
+                files = {
+                    keyfile = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
+                    certfile = "/etc/ssl/private/ssl-cert-snakeoil.key"
+                    reload = true
                 }
             }
 

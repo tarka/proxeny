@@ -1,38 +1,43 @@
 {
-    hostname = "www.example.com"
-    listen = "[::]"  // This covers IPv4 & IPv6
-
-    // Unencrypted connections are not enabled by default; if they are
-    // the below these settings are the default.
-    insecure = {
-        port = 80
-        redirect = true  // Redirect to TLS
+    listen = {
+        addr = "[::]"  // Default; this covers IPv4 & IPv6
+        insecure_port = 80 // Default
+        tls_port = 443 // Default
     }
 
-    tls = {
-        port = 443  // Default
-        config = {
-            acme = {
-                contact = "admin@example.com"
-                challenge.type = "http-01"
+    vhosts = [
+        {
+            hostname = "www.example.com"
+
+            // Unencrypted connections are not enabled by default; if they are
+            // the below these settings are the default.
+                insecure = {
+                    redirect = true  // Redirect to TLS
+                }
+
+            tls = {
+                acme = {
+                    contact = "admin@example.com"
+                    challenge.type = "http-01"
+                }
             }
-        }
-    }
 
-    backends = [
-        {
-            // A service that does not allow a custom root/context,
-            // so we must place at root.
-            context = "/"
-            url = "http://localhost:8443"
-            // This service enforces TLS with a self-signed cert, so
-            // we need to disable certificate verification.
-            trust = true
-        }
-        {
-            // A better behaved service that allows a custom root.
-            context = "/copyparty"
-            url = "http://localhost:9090"
+            backends = [
+                {
+                    // A service that does not allow a custom root/context,
+                    // so we must place at root.
+                        context = "/"
+                    url = "http://localhost:8443"
+                    // This service enforces TLS with a self-signed cert, so
+                    // we need to disable certificate verification.
+                        trust = true
+                }
+                {
+                    // A better behaved service that allows a custom root.
+                        context = "/copyparty"
+                    url = "http://localhost:9090"
+                }
+            ]
         }
     ]
 }
