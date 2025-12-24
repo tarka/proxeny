@@ -92,12 +92,12 @@ impl AcmeRuntime {
                     .ok_or(anyhow!("Failed to find base domain for {fqdn}"))?;
                 let domain = String::from_utf8(domain_psl.as_bytes().to_vec())?;
 
-                let cert_base = Utf8PathBuf::from(aconf.directory.clone());
+                let cert_base = Utf8PathBuf::from(&aconf.directory);
                 let cert_dir = cert_base
                     .join(&fqdn);
                 info!("Creating ACME certificate dir {cert_base}");
                 create_dir_all(&cert_dir)
-                    .context("Error creating directory {cert_base}")?;
+                    .context(format!("Error creating directory {cert_base}"))?;
 
                 let cert_file = cert_dir
                     .join(&fqdn);
@@ -108,7 +108,7 @@ impl AcmeRuntime {
                 let contact_dir = cert_base
                     .join(&contact);
                 create_dir_all(&contact_dir)
-                    .context("Error creating directory {contact_dir}")?;
+                    .context(format!("Error creating directory {contact_dir}"))?;
 
                 let contactfile = contact_dir
                     .join(&contact)

@@ -97,7 +97,6 @@ fn test_extract_files() -> Result<()> {
     Ok(())
 }
 
-
 #[test]
 #[ignore]
 fn test_dns01_dev_config() -> Result<()> {
