@@ -19,6 +19,7 @@
                 acme = {
                     contact = "admin@example.com"
                     challenge.type = "http-01"
+                    profile = "shortlived"
                 }
             }
 

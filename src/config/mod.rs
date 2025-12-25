@@ -7,6 +7,7 @@ use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::{Deserialize, Deserializer};
 use serde_default_utils::{default_bool, serde_inline_default};
+use strum_macros::IntoStaticStr;
 use tracing_log::log::info;
 
 #[derive(Clone, Debug, Parser)]
@@ -61,6 +62,18 @@ impl Default for AcmeProvider {
     }
 }
 
+#[derive(Copy, Clone, Debug, Deserialize, IntoStaticStr)]
+#[serde(rename_all = "lowercase")]
+pub enum AcmeProfile {
+    ShortLived,
+    TlsServer,
+}
+impl Default for AcmeProfile {
+    fn default() -> Self {
+        Self::TlsServer
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct DnsProvider {
     pub dns_provider: zone_update::Provider,
@@ -85,6 +98,8 @@ pub struct TlsAcmeConfig {
     #[serde_inline_default("/var/lib/vicarian/acme".to_string())]
     pub directory: String,
     pub contact: String,
+    #[serde(default)]
+    pub profile: AcmeProfile,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -34,6 +34,7 @@ fn test_dns01_example_config() -> Result<()> {
             challenge: AcmeChallenge::Dns01(DnsProvider {
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
+            profile: AcmeProfile::TlsServer,
         })));
 
     assert_eq!("/", config.vhosts[0].backends[0].context.as_ref().unwrap());
@@ -54,7 +55,7 @@ fn test_http01_example_config() -> Result<()> {
             acme_provider: AcmeProvider::LetsEncrypt,
             directory: _,
             challenge: AcmeChallenge::Http01,
-
+            profile: AcmeProfile::ShortLived,
         })));
 
     assert_eq!("/copyparty", config.vhosts[0].backends[1].context.as_ref().unwrap());
@@ -119,7 +120,7 @@ fn test_dns01_dev_config() -> Result<()> {
             challenge: AcmeChallenge::Dns01(DnsProvider {
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
-
+            profile: AcmeProfile::TlsServer,
         })));
 
     assert_eq!("/", config.vhosts[0].backends[0].context.as_ref().unwrap());

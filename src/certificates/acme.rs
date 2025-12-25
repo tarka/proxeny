@@ -9,6 +9,7 @@ use instant_acme::{
     LetsEncrypt, NewOrder, OrderStatus, RetryPolicy,
 };
 use itertools::Itertools;
+use phf_macros::phf_map;
 use tokio::{
     fs::{self, File, read_to_string},
     io::AsyncWriteExt,
@@ -22,17 +23,30 @@ use crate::{
     config::{AcmeChallenge, DnsProvider, TlsConfig},
 };
 
-// TODO: Configurable profiles?
-const LE_PROFILE: &str = "shortlived";
-const _EXPIRY_WINDOW_DAYS: i64 = 30;
-const _EXPIRY_WINDOW_SECS: i64 = _EXPIRY_WINDOW_DAYS * 24 * 60 * 60;
-const EXPIRY_WINDOW_SHORTLIVED_DAYS: i64 = 4;
-const EXPIRY_WINDOW_SHORTLIVED_SECS: i64 = EXPIRY_WINDOW_SHORTLIVED_DAYS * 24 * 60 * 60;
-
-// TODO: Increase fuzz range depending on profile
+const DAYS_TO_SECS: i64 =  24 * 60 * 60;
+// TODO: Fuzz range calculated from profile
 const FUZZY_RANGE: (i64, i64) = (30, 120);
-
 const ONE_SECOND: TimeDelta = TimeDelta::new(1, 0).unwrap();
+
+#[derive(Debug)]
+struct LeProfile {
+    name: &'static str,
+    _validity_days: i64,
+    exp_window_secs: i64,
+}
+
+static LE_PROFILES: phf::Map<&'static str, LeProfile> = phf_map! {
+    "tlsserver" => LeProfile {
+        name: "tlsserver",
+        _validity_days: 90, // TODO: Will be reduced to 45 in 2026
+        exp_window_secs: 30 * DAYS_TO_SECS,
+    },
+    "shortlived" => LeProfile {
+        name: "shortlived",
+        _validity_days: 6,
+        exp_window_secs: 4 * DAYS_TO_SECS,
+    }
+};
 
 
 #[derive(Debug)]
@@ -45,6 +59,7 @@ struct AcmeHost {
     keyfile: Utf8PathBuf,
     certfile: Utf8PathBuf,
     challenge: AcmeChallenge,
+    profile: &'static LeProfile,
 }
 
 impl AcmeHost {
@@ -114,6 +129,9 @@ impl AcmeRuntime {
                     .join(&contact)
                     .with_extension("conf");
 
+                let profile = LE_PROFILES.get(aconf.profile.into())
+                        .ok_or(anyhow!("No supported profile {:?}", aconf.profile))?;
+
                 let acme_host = AcmeHost {
                     fqdn,
                     aliases: vhost.aliases.clone(),
@@ -123,6 +141,7 @@ impl AcmeRuntime {
                     contact,
                     contactfile,
                     challenge: aconf.challenge.clone(),
+                    profile,
                 };
                 Ok(acme_host)
             })
@@ -160,8 +179,7 @@ impl AcmeRuntime {
 
         let mut quit_rx = self.context.quit_rx.clone();
         loop {
-            let next_secs = self.next_expiring_secs()
-                .map(|s| (s - EXPIRY_WINDOW_SHORTLIVED_SECS).max(0))
+            let next_secs = self.next_window_secs()
                 .map(|s| TimeDelta::new(s, 0))
                 .flatten();
             let expiring_secs = if let Some(seconds) = next_secs {
@@ -240,17 +258,19 @@ impl AcmeRuntime {
             // Either None or expiring within window.
             // TODO: This could use renewal_info() in instant-acme.
             .filter(|ah| ! self.certstore.by_host(&ah.fqdn)
-                    .is_some_and(|cert| ! cert.is_expiring_in_secs(EXPIRY_WINDOW_SHORTLIVED_SECS)))
+                    .is_some_and(|cert| ! cert.is_expiring_in_secs(ah.profile.exp_window_secs)))
             .collect()
     }
 
-    pub fn next_expiring_secs(&self) -> Option<i64> {
+    pub fn next_window_secs(&self) -> Option<i64> {
         self.acme_hosts.iter()
-            .filter_map(|ah| self.certstore.by_host(&ah.fqdn))
-            .map(|hc| hc.expires_in_secs())
+            .filter_map(|ah| {
+                self.certstore.by_host(&ah.fqdn)
+                    .map(|hc| hc.expires_in_secs() - ah.profile.exp_window_secs)
+            })
+            .map(|s| s.max(0))
             .sorted()
             .next()
-            .map(|s| s.max(0))
     }
 
     async fn renew_instant_acme(&self, acme_host: &AcmeHost) -> Result<PemCertificate> {
@@ -264,7 +284,7 @@ impl AcmeRuntime {
             .collect::<Vec<Identifier>>();
 
         let no = NewOrder::new(&hids)
-            .profile(LE_PROFILE);
+            .profile(acme_host.profile.name);
         let mut order = account.new_order(&no).await?;
 
         let mut authorisations = order.authorizations();
