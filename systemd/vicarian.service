@@ -22,7 +22,6 @@ KillMode=mixed
 KillSignal=SIGINT
 TimeoutStopSec=5s
 
-
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=read-only

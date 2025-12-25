@@ -1,15 +1,19 @@
 
 {
-  hostname = "host01.example.com"
-  tls = {
-    config.files = {
-      keyfile = "/etc/ssl/certs/host01.example.com.key"
-      certfile = "/etc/ssl/certs/host01.example.com.crt"
-    }
-  }
-  backends = [
-    {
-      url = "http://localhost:8080"
-    }
-  ]
+    vhosts = [
+        {
+            hostname = "host01.example.com"
+            tls = {
+                files = {
+                    keyfile = "/etc/ssl/certs/host01.example.com.key"
+                    certfile = "/etc/ssl/certs/host01.example.com.crt"
+                }
+            }
+            backends = [
+                {
+                    url = "http://localhost:8080"
+                }
+            ]
+        }
+    ]
 }

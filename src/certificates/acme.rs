@@ -19,7 +19,7 @@ use zone_update::async_impl::AsyncDnsProvider;
 use crate::{
     RunContext,
     certificates::{HostCertificate, store::CertStore},
-    config::{AcmeChallenge, DnsProvider, TlsConfigType},
+    config::{AcmeChallenge, DnsProvider, TlsConfig},
 };
 
 // TODO: Configurable profiles?
@@ -77,27 +77,27 @@ pub struct ChallengeTokens {
 impl AcmeRuntime {
 
     pub fn new(certstore: Arc<CertStore>, context: Arc<RunContext>) -> Result<Self> {
-        let acme_hosts = context.config.servers().iter()
-            .filter_map(|s| match &s.tls.config {
-                TlsConfigType::Files(_) => None, // Handled elsewhere
-                TlsConfigType::Acme(aconf) => Some(aconf),
+        let acme_hosts = context.config.vhosts.iter()
+            .filter_map(|vhost| match &vhost.tls {
+                TlsConfig::Files(_) => None, // Handled elsewhere
+                TlsConfig::Acme(aconf) => Some((vhost, aconf)),
             })
-            .map(|aconf| {
+            .map(|(vhost, aconf)| {
                 // Default;
                 // keyfile  -> /var/lib/vicarian/acme/www.example.com/www.example.com.key
                 // certfile -> /var/lib/vicarian/acme/www.example.com/www.example.com.crt
-                let fqdn = context.config.hostname.clone();
+                let fqdn = vhost.hostname.clone();
 
                 let domain_psl = psl::domain(fqdn.as_bytes())
                     .ok_or(anyhow!("Failed to find base domain for {fqdn}"))?;
                 let domain = String::from_utf8(domain_psl.as_bytes().to_vec())?;
 
-                let cert_base = Utf8PathBuf::from(aconf.directory.clone());
+                let cert_base = Utf8PathBuf::from(&aconf.directory);
                 let cert_dir = cert_base
                     .join(&fqdn);
                 info!("Creating ACME certificate dir {cert_base}");
                 create_dir_all(&cert_dir)
-                    .context("Error creating directory {cert_base}")?;
+                    .context(format!("Error creating directory {cert_base}"))?;
 
                 let cert_file = cert_dir
                     .join(&fqdn);
@@ -108,7 +108,7 @@ impl AcmeRuntime {
                 let contact_dir = cert_base
                     .join(&contact);
                 create_dir_all(&contact_dir)
-                    .context("Error creating directory {contact_dir}")?;
+                    .context(format!("Error creating directory {contact_dir}"))?;
 
                 let contactfile = contact_dir
                     .join(&contact)
@@ -116,7 +116,7 @@ impl AcmeRuntime {
 
                 let acme_host = AcmeHost {
                     fqdn,
-                    aliases: context.config.aliases.clone(),
+                    aliases: vhost.aliases.clone(),
                     domain,
                     keyfile,
                     certfile,

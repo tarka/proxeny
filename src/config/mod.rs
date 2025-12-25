@@ -6,7 +6,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
 use http::Uri;
 use serde::{Deserialize, Deserializer};
-use serde_default_utils::{default_bool, default_u16, serde_inline_default};
+use serde_default_utils::{default_bool, serde_inline_default};
 use tracing_log::log::info;
 
 #[derive(Clone, Debug, Parser)]
@@ -99,16 +99,7 @@ pub struct TlsFilesConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub struct TlsConfig {
-    #[serde(default = "default_u16::<443>")]
-    pub port: u16,
-    pub config: TlsConfigType,
-}
-
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TlsConfigType {
+pub enum TlsConfig {
     Files(TlsFilesConfig),
     Acme(TlsAcmeConfig),
 }
@@ -124,8 +115,6 @@ pub struct Backend {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Insecure {
-    #[serde(default = "default_u16::<80>")]
-    pub port: u16,
     #[serde(default = "default_bool::<true>")]
     pub redirect: bool,
     // FIXME: HTTP-01 setup here?
@@ -133,7 +122,7 @@ pub struct Insecure {
 
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
-pub struct Config {
+pub struct Vhost {
     /// This should the FQDN, especially if using ACME as it is used
     /// to calculate the domain.
     pub hostname: String,
@@ -144,19 +133,48 @@ pub struct Config {
     pub insecure: Option<Insecure>,
     pub tls: TlsConfig,
     pub backends: Vec<Backend>,
+}
+
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default)]
+pub struct Listen {
+    pub addr: String,
+    pub insecure_port: u16,
+    pub tls_port: u16,
+}
+
+impl Default for Listen {
+    fn default() -> Self {
+        Self {
+            addr: "[::]".to_string(),
+            insecure_port: 80,
+            tls_port: 443
+        }
+    }
+}
+
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
+pub struct Config {
+    #[serde(default)]
+    pub listen: Listen,
+    pub vhosts: Vec<Vhost>,
     #[serde(default = "default_bool::<false>")]
     pub dev_mode: bool,
 }
 
-pub type Server = Config;
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            listen: Default::default(),
+            vhosts: Vec::new(),
+            dev_mode: true,
+        }
+    }
+}
 
 impl Config {
-    pub fn servers(&self) -> Vec<&Server> {
-        // TODO: We don't currently support multiple servers in the
-        // config, however some components do (see
-        // config/store.rs). This may change, so we fake it here.
-        vec![self]
-    }
 
     pub fn from_file(file: &Utf8Path) -> Result<Self> {
         info!("Loading config {file}");
@@ -165,23 +183,4 @@ impl Config {
         Ok(config)
     }
 
-    // FIXME: Should be ::default? It's only really used in tests.
-    pub fn empty() -> Self {
-        Self {
-            hostname: String::new(),
-            aliases: Vec::new(),
-            listen: String::new(),
-            insecure: None,
-            tls: TlsConfig {
-                port: 0,
-                config: TlsConfigType::Files(TlsFilesConfig {
-                    keyfile: Utf8PathBuf::new(),
-                    certfile: Utf8PathBuf::new(),
-                    reload: false,
-                }),
-            },
-            backends: Vec::new(),
-            dev_mode: true,
-        }
-    }
 }

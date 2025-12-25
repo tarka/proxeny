@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
 use async_trait::async_trait;
 use http::{
@@ -8,7 +8,8 @@ use http::{
 };
 
 use pingora_core::{
-    apps::http_app::ServeHttp, prelude::HttpPeer, protocols::http::ServerSession, upstreams::peer::Peer, ErrorType, OkOrErr, OrErr
+    ErrorType, OkOrErr, OrErr, apps::http_app::ServeHttp, prelude::HttpPeer,
+    protocols::http::ServerSession, upstreams::peer::Peer,
 };
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
@@ -152,15 +153,19 @@ impl ServeHttp for CleartextHandler {
 pub struct Vicarian {
     _context: Arc<RunContext>,
     _certstore: Arc<CertStore>,
-    routes_by_host: papaya::HashMap<String, Router>,
+    routes_by_host: papaya::HashMap<String, Arc<Router>>,
 }
 
 impl Vicarian {
     pub fn new(_certstore: Arc<CertStore>, context: Arc<RunContext>) -> Self {
-        let routes_by_host: papaya::HashMap<String, Router> = context.config.servers().iter()
-            .map(|s| (s.hostname.clone(),
-                      Router::new(&s.backends)))
-            .collect();
+        let routes_by_host = context.config.vhosts.iter()
+            .flat_map(|vhost| {
+                let router = Arc::new(Router::new(&vhost.backends));
+                iter::once(&vhost.hostname)
+                    .chain(vhost.aliases.iter())
+                    .map(move |h| (h.clone(), router.clone()))
+            })
+            .collect::<papaya::HashMap<String, Arc<Router>>>();
         Self {
             _context: context,
             _certstore,
