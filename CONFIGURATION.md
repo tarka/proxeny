@@ -11,91 +11,98 @@ could be made smaller, but some defaults have been left in for clarity):
 
 ```corn
 {
-  hostname = "example.com"
-  listen = "[::]"
-  
-  // Vicarian does not enable non-TLS by default
-  insecure = {
-    port = 80  // Default
-    redirect = true  // Redirect to TLS
-  }
-  
-  tls = {
-    port = 443  // Default
-    config = {
-      // Or `files` for existing certificates.
-      acme = {
-        acme_provider = "letsencrypt"  // Default; only supported provider currently
-        contact = "admin@example.com"
-        challenge.type = "http-01" // `dns-01` is also supported, see below
-      }
+    listen = {
+        addr = "[::]"  // This covers IPv4 & IPv6
+        insecure_port = 80 // Default
+        tls_port = 443 // Default
     }
-  }
 
-  backends = [
-    {
-      context = "/"
-      url = "http://localhost:8080"
-    }
-    {
-      context = "/app2"
-      url = "https://localhost:8443"
-      trust = true
-    }
-  ]
+    vhosts = [
+        {
+            hostname = "example.com"
+
+            insecure = {
+                redirect = true
+            }
+
+            tls = {
+                acme = {
+                    contact = "admin@example.com"
+                    challenge.type = "http-01"
+                }
+            }
+
+            backends = [
+                {
+                    context = "/"
+                    url = "http://localhost:8080"
+                }
+                {
+                    context = "/app2"
+                    url = "https://localhost:8443"
+                    trust = true
+                }
+            ]
+        }
+    ]
 }
 ```
 
-## Example Configurations
-
-See the example configuration files in the `examples/` directory for basic working examples:
-
-- `vicarian-tls-files.corn`: TLS with certificate files
-- `vicarian-http01.corn`: ACME with HTTP-01 challenge
-- `vicarian-dns01.corn`: ACME with DNS-01 challenge
-
 ## Configuration Fields
 
-### hostname
-- **Type**: String
+### listen
+- **Type**: Object
+- **Optional**: Yes (uses default values if not specified)
+- **Description**: Network listening configuration for the proxy.
+- **Fields**:
+  - addr: The IP address to bind the server to (default: `"[::]"`)
+  - insecure_port: The HTTP port to listen on (default: 80)
+  - tls_port: The HTTPS port to listen on (default: 443)
+
+### vhosts
+- **Type**: Array of objects
 - **Required**: Yes
-- **Description**: The primary hostname for this server. Used for TLS certificate generation when using ACME.
+- **Description**: List of virtual hosts (domains) that this server will handle.
+
+### hostname (within vhost)
+- **Type**: String
+- **Required**: Yes (within each vhost)
+- **Description**: The primary hostname for this virtual host. Used for TLS certificate generation when using ACME.
 - **Example**: `hostname = "example.com"`
 
-### listen
+### aliases (within vhost)
+- **Type**: Array of strings
+- **Default**: Empty array
+- **Description**: Additional domain names that should be handled by this virtual host.
+- **Example**: `aliases = ["www.example.com", "api.example.com"]`
+
+### listen (within vhost)
 - **Type**: String
 - **Default**: `"[::]"`
-- **Description**: The IP address to bind the server to. Uses IPv6 notation to handle both IPv4 and IPv6 connections.
-- **Examples**: 
+- **Description**: The IP address to bind this specific virtual host to. Overrides the global listen.addr if specified.
+- **Examples**:
   - `listen = "[::]"` (all interfaces)
   - `listen = "127.0.0.1"` (IPv4 localhost)
 
-### aliases
-- **Type**: Array of strings
-- **Default**: Empty array
-- **Description**: Additional domain names that should be handled by this server.
-- **Example**: `aliases = ["www.example.com", "api.example.com"]`
-
-### insecure
+### insecure (within vhost)
 - **Type**: Object
 - **Optional**: Yes (if TLS is configured with ACME)
-- **Description**: Configuration for HTTP (non-TLS) connections.
+- **Description**: Configuration for HTTP (non-TLS) connections for this virtual host.
 - **Fields**:
-  - port: The HTTP port to listen on (default: 80)
   - redirect: Whether to redirect HTTP requests to HTTPS (default: true)
 
-### tls
+### tls (within vhost)
 - **Type**: Object
-- **Required**: Yes
-- **Description**: TLS configuration for HTTPS connections.
+- **Required**: Yes (within each vhost)
+- **Description**: TLS configuration for HTTPS connections for this virtual host.
 - **Fields**:
-  - port: The HTTPS port to listen on (default: 443)
-  - config: Configuration for the TLS certificate (either "files" or "acme")
+  - acme: Configuration for ACME certificate provisioning
+  - files: Configuration for using existing certificate files
 
-### backends
+### backends (within vhost)
 - **Type**: Array of objects
-- **Required**: Yes
-- **Description**: List of backend services that vicarian will proxy requests to.
+- **Required**: Yes (within each vhost)
+- **Description**: List of backend services that this virtual host will proxy requests to.
 - **Fields**:
   - context: The URL path prefix this backend handles (default: "/")
   - url: The backend service URL
@@ -107,13 +114,10 @@ See the example configuration files in the `examples/` directory for basic worki
 
 ```corn
 tls = {
-  port = 443
-  config = {
-    files = {
-      keyfile = "/path/to/private.key"
-      certfile = "/path/to/certificate.crt"
-      reload = true
-    }
+  files = {
+    keyfile = "/path/to/private.key"
+    certfile = "/path/to/certificate.crt"
+    reload = true
   }
 }
 ```
@@ -122,12 +126,9 @@ tls = {
 
 ```corn
 tls = {
-  port = 443
-  config = {
-    acme = {
-      contact = "admin@example.com"
-      challenge.type = "http-01"
-    }
+  acme = {
+    contact = "admin@example.com"
+    challenge.type = "http-01"
   }
 }
 ```
@@ -136,17 +137,15 @@ tls = {
 
 ```corn
 tls = {
-  port = 443
-  config = {
-    acme = {
-      contact = "admin@example.com"
-      challenge = {
-        type = "dns-01"  // or "http-01"
-        dns_provider = {
-          name = "porkbun"
-          key = $env_PORKBUN_KEY
-          secret = $env_PORKBUN_SECRET
-        }
+  acme = {
+    acme_provider = "letsencrypt"  // Default & only supported provider ATM
+    contact = "admin@example.com"
+    challenge = {
+      type = "dns-01"  // or "http-01"
+      dns_provider = {
+        name = "porkbun"
+        key = $env_PORKBUN_KEY
+        secret = $env_PORKBUN_SECRET
       }
     }
   }
@@ -172,12 +171,13 @@ Each backend entry has the following fields:
 - **Default**: false
 - **Description**: Set to true if the backend uses a self-signed certificate or certificate that can't be verified by the system's CA store.
 
-## Example Configurations
 
-See the example configuration files in the `examples/` directory for full working examples:
-- `vicarian-tls-files.corn`: TLS with certificate files
-- `vicarian-http01.corn`: ACME with HTTP-01 challenge
-- `vicarian-dns01.corn`: ACME with DNS-01 challenge
+## Additional Configuration Options
+
+### dev_mode
+- **Type**: Boolean
+- **Default**: false
+- **Description**: Enables development mode with relaxed security settings. This should not be used in production environments.
 
 ## Environment Variables
 
