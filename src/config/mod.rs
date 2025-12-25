@@ -64,6 +64,7 @@ impl Default for AcmeProvider {
 
 #[derive(Copy, Clone, Debug, Deserialize, IntoStaticStr)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum AcmeProfile {
     ShortLived,
     TlsServer,
