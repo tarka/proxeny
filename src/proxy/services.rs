@@ -169,6 +169,9 @@ impl Vicarian {
     }
 }
 
+const E404: pingora_core::ErrorType = ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16());
+const E500: pingora_core::ErrorType = ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16());
+
 #[async_trait]
 impl ProxyHttp for Vicarian {
     type CTX = ();
@@ -182,18 +185,18 @@ impl ProxyHttp for Vicarian {
 
         let pinned = self.routes_by_host.pin();
         let router = pinned.get(&components.host.to_string())
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "UP: Hostname not found in backends")?;
+            .or_err(E404, "UP: Hostname not found in backends")?;
 
         let backend = router.lookup(components.path)
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "UP: Path not found in host backends")?
+            .or_err(E404, "UP: Path not found in host backends")?
             .backend;
 
         let url = &backend.url;
         let tls = url.scheme() == Some(&Scheme::HTTPS);
         let host = url.host()
-            .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Backend host lookup failed")?;
+            .or_err(E500, "Backend host lookup failed")?;
         let port = url.port()  // TODO: Can default this? Or should be required?
-            .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Backend port lookup failed")?
+            .or_err(E500, "Backend port lookup failed")?
             .as_u16();
 
         let mut peer = HttpPeer::new((host, port), tls, host.to_string());
@@ -215,10 +218,10 @@ impl ProxyHttp for Vicarian {
 
         let pinned = self.routes_by_host.pin();
         let router = pinned.get(&components.host.to_string())
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "URF: Hostname not found in backends")?;
+            .or_err(E404, "URF: Hostname not found in backends")?;
 
         let backend = router.lookup(components.path)
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "URF: Path not found in host backends")?
+            .or_err(E404, "URF: Path not found in host backends")?
             .backend;
 
         if let Some(context) = &backend.context
@@ -236,7 +239,7 @@ impl ProxyHttp for Vicarian {
             let uuri = Uri::builder()
                 .path_and_query(upq)
                 .build()
-                .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Failed to rewrite path")?;
+                .or_err(E500, "Failed to rewrite path")?;
             debug!("Modified to {uuri}");
             upstream_request.set_uri(uuri);
         }
@@ -262,10 +265,10 @@ impl ProxyHttp for Vicarian {
 
         let pinned = self.routes_by_host.pin();
         let router = pinned.get(&components.host.to_string())
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Hostname not found in backends")?;
+            .or_err(E404, "Hostname not found in backends")?;
 
         let backend = router.lookup(components.path)
-            .or_err(ErrorType::HTTPStatus(StatusCode::NOT_FOUND.as_u16()), "Path not found in host backends")?
+            .or_err(E404, "Path not found in host backends")?
             .backend;
 
         if let Some(context) = &backend.context
@@ -276,9 +279,9 @@ impl ProxyHttp for Vicarian {
                 let header_p = upstream_response.headers.get(&headername);
                 if let Some(header) = header_p {
                     let oldloc = header.to_str()
-                        .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Failed to rewrite location header")?;
+                        .or_err(E500, "Failed to rewrite location header")?;
                     let newloc = HeaderValue::from_str(&format!("{context}{oldloc}"))
-                        .or_err(ErrorType::HTTPStatus(StatusCode::INTERNAL_SERVER_ERROR.as_u16()), "Failed to rewrite location header")?;
+                        .or_err(E500, "Failed to rewrite location header")?;
 
                     debug!("Modifying Location to {newloc:?}");
                     let _old = upstream_response.insert_header(&headername, newloc);
