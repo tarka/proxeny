@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use boring::{
     asn1::{Asn1Time, Asn1TimeRef},
     x509::GeneralNameRef,
@@ -138,8 +138,10 @@ impl Hash for HostCertificate {
 }
 
 fn load_certs(keyfile: &Utf8Path, certfile: &Utf8Path) -> Result<(PKey<Private>, Vec<X509>)> {
-    let kdata = fs::read(keyfile)?;
-    let cdata = fs::read(certfile)?;
+    let kdata = fs::read(keyfile)
+        .context("Failed to load keyfile {keyfile}")?;
+    let cdata = fs::read(certfile)
+        .context("Failed to load certfile {certfile}")?;
 
     let key = PKey::private_key_from_pem(&kdata)?;
     let certs = X509::stack_from_pem(&cdata)?;

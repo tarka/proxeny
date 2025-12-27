@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use tracing_log::log::debug;
+use tracing_log::log::info;
 
 use crate::{
     RunContext,
@@ -22,7 +22,7 @@ impl ExternalProvider {
                 TlsConfig::Files(tfc) => {
                     // Wrapper closure for `?` clarity
                     let result = (|| {
-                        debug!("Loading {} certs from {}, {}", vhost.hostname, tfc.keyfile, tfc.certfile);
+                        info!("Loading {} certs from {}, {}", vhost.hostname, tfc.keyfile, tfc.certfile);
                         let hostcert = HostCertificate::new(
                             tfc.keyfile.clone(),
                             tfc.certfile.clone(),

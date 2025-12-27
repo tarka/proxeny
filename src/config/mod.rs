@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Parser};
 use http::Uri;
@@ -194,7 +194,8 @@ impl Config {
 
     pub fn from_file(file: &Utf8Path) -> Result<Self> {
         info!("Loading config {file}");
-        let key = std::fs::read_to_string(&file)?;
+        let key = std::fs::read_to_string(&file)
+            .context("Error loading config file {file}")?;
         let config = corn::from_str(&key)?;
         Ok(config)
     }
