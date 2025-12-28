@@ -15,8 +15,7 @@ use tracing::info;
 use crate::{
     certificates::{
         acme::AcmeRuntime, handler::CertHandler, store::CertStore
-    },
-    proxy::services::{
+    }, config::{AcmeChallenge, TlsAcmeConfig, TlsConfig}, proxy::services::{
         CleartextHandler, Vicarian
     }, RunContext
 };
@@ -47,15 +46,20 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, acme: Arc<AcmeRuntime>, conte
     };
     pingora_server.add_service(tls_proxy);
 
-    if let Some(insecure) = &context.config.vhosts[0].insecure // FIXME
-        && insecure.redirect
-    {
+    let has_http01 = context.config.vhosts.iter()
+        .any(|vh| matches!(vh.tls, TlsConfig::Acme(
+            TlsAcmeConfig { challenge: AcmeChallenge::Http01, .. })));
+
+    if has_http01 || context.config.listen.insecure_port.is_some() {
+        let insecure_port = context.config.listen.insecure_port.unwrap_or(80);
+
         let redirector = CleartextHandler::new(acme, context.config.listen.tls_port);
         let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);
-        let addr = format!("{}:{}", context.config.listen.addr, context.config.listen.insecure_port);
+        let addr = format!("{}:{}", context.config.listen.addr, insecure_port);
         service.add_tcp(&addr);
         pingora_server.add_service(service);
     };
+
     pingora_server.run(pingora_core::server::RunArgs::default());
 
     Ok(())

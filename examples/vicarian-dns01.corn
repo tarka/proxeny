@@ -6,17 +6,13 @@ let {
 } in {
     listen = {
         addr = "[::]"  // Default; this covers IPv4 & IPv6
-        insecure_port = 80 // Default
+        insecure_port = 80 // Default; will redirect to TLS
         tls_port = 443 // Default
     }
 
     vhosts = [
         {
             hostname = "files.example.com"
-
-            insecure = {
-                redirect = true
-            }
 
             tls = {
                 acme = {
@@ -37,7 +33,7 @@ let {
             backends = [
                 {
                     // A service that does not allow a custom root/context,
-                    // so we must place at root. 
+                    // so we must place at root.
                     context = "/"
                     url = "http://localhost:8443"
                     // This service enforces TLS with a self-signed cert, so

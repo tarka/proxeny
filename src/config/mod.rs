@@ -129,13 +129,6 @@ pub struct Backend {
     pub trust: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct Insecure {
-    #[serde(default = "default_bool::<true>")]
-    pub redirect: bool,
-    // FIXME: HTTP-01 setup here?
-}
-
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 pub struct Vhost {
@@ -146,7 +139,6 @@ pub struct Vhost {
     pub aliases: Vec<String>,
     #[serde_inline_default("[::]".to_string())]
     pub listen: String,
-    pub insecure: Option<Insecure>,
     pub tls: TlsConfig,
     pub backends: Vec<Backend>,
 }
@@ -156,7 +148,7 @@ pub struct Vhost {
 #[serde(default)]
 pub struct Listen {
     pub addr: String,
-    pub insecure_port: u16,
+    pub insecure_port: Option<u16>,
     pub tls_port: u16,
 }
 
@@ -164,7 +156,7 @@ impl Default for Listen {
     fn default() -> Self {
         Self {
             addr: "[::]".to_string(),
-            insecure_port: 80,
+            insecure_port: None,
             tls_port: 443
         }
     }

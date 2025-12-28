@@ -10,10 +10,6 @@
         {
             hostname = "files.example.com"
 
-            insecure = {
-                redirect = true
-            }
-
             tls = {
                 files = {
                     keyfile = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
