@@ -51,7 +51,8 @@ pub fn run_indefinitely(certstore: Arc<CertStore>, acme: Arc<AcmeRuntime>, conte
             TlsAcmeConfig { challenge: AcmeChallenge::Http01, .. })));
 
     if has_http01 || context.config.listen.insecure_port.is_some() {
-        let insecure_port = context.config.listen.insecure_port.unwrap_or(80);
+        let insecure_port = context.config.listen.insecure_port
+            .unwrap_or(80);
 
         let redirector = CleartextHandler::new(acme, context.config.listen.tls_port);
         let mut service = Service::new("HTTP->HTTPS Redirector".to_string(), redirector);

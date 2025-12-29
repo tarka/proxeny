@@ -91,6 +91,7 @@ pub enum AcmeChallenge {
 
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TlsAcmeConfig {
     #[serde(default)]
     pub acme_provider: AcmeProvider,
@@ -104,6 +105,7 @@ pub struct TlsAcmeConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TlsFilesConfig {
     #[serde(deserialize_with = "deserialize_canonical")]
     pub keyfile: Utf8PathBuf,
@@ -114,13 +116,14 @@ pub struct TlsFilesConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub enum TlsConfig {
     Files(TlsFilesConfig),
     Acme(TlsAcmeConfig),
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Backend {
     pub context: Option<String>,
     #[serde(with = "http_serde::uri")]
@@ -131,6 +134,7 @@ pub struct Backend {
 
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Vhost {
     /// This should the FQDN, especially if using ACME as it is used
     /// to calculate the domain.
@@ -145,7 +149,7 @@ pub struct Vhost {
 
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Listen {
     pub addr: String,
     pub insecure_port: Option<u16>,
@@ -164,6 +168,7 @@ impl Default for Listen {
 
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub listen: Listen,
