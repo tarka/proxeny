@@ -12,7 +12,6 @@ readme = "README.md"
 keywords = ["proxy", "https", "reverse-proxy", "pingora"]
 categories = ["web-programming::http-server", "network-programming"]
 license = "Apache-2.0"
-rust-version = "1.88.0"
 
 [dependencies]
 anyhow = "1.0.100"
@@ -40,18 +39,18 @@ pingora-boringssl = "0.6.0"
 pingora-core = { version = "0.6.0", features = ["boringssl"] }
 pingora-http = "0.6.0"
 pingora-proxy = "0.6.0"
-psl = "2.1.174"
+psl = "2.1.175"
 rustls = "0.23.35"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_default_utils = { version = "0.3.1", features = ["inline"] }
-serde_json = "1.0.147"
+serde_json = "1.0.148"
 strum_macros = "0.27.2"
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["macros", "rt", "sync"] }
 tracing = "0.1.44"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-zone-update = { version = "0.8.0", features = ["async"] }
+zone-update = { version = "0.9.0", features = ["async"] }
 
 [features]
 integration_tests = []
