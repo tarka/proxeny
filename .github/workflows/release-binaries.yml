@@ -56,8 +56,9 @@ jobs:
         run: |
           mkdir -p etc/systemd/system etc/vicarian
           cp systemd/vicarian.service etc/systemd/system/
+          cp -r examples/ etc/vicarian/examples
           cp examples/vicarian-tls-files.corn etc/vicarian/vicarian.corn
-          touch etc/vicarian/secrets
+          echo '# This file is added to the environment by the systemd unit' > etc/vicarian/secrets
           chmod o-rwx etc/vicarian/secrets
 
       - name: Install Rust toolchain
@@ -73,4 +74,4 @@ jobs:
           archive: $bin-$tag-${{ matrix.shortarch }}
           leading-dir: true
           bin-leading-dir: bin
-          include: LICENSE,README.md,etc
+          include: LICENSE,README.md,CONFIGURATION.md,etc

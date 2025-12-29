@@ -12,31 +12,45 @@ This software should be consider pre-alpha; the feature-set is
 active development. It should not be considered production-ready and no
 warranty is expressed or implied.
 
+Only Linux is currently supported (x86_64 and Arm64). Testing for other
+platforms is welcome.
+
 ## Features
 
 ### Current features
 
-- **Reverse Proxy**: Route traffic to multiple backend services based on URL
+- **Multiple HTTP and HTTPS backend**: Route traffic to multiple backend services based on URL
   contexts
+- **Basic path rewriting**
 - **Dynamic Certificate Loading**: Externally provided TLS certificates are
   monitored and reloaded on update.
 - **ACME Support**: Automatic certificate issuance and renewal via ACME
-  protocol; both HTTP and DNS types are supported.
+  protocol; both HTTP and DNS types are supported. 
 - **Multiple DNS Providers**: Multiple DNS providers for ACME are supported via
   the [zone-update](https://github.com/tarka/zone-update/) project. See that
   project for a list of supported providers.
+- **Virtual hosts**.
 
 ### Possible Future Features
 
 The following may be implemented at some point depending on interest and
 resources.
 
-- Static file serving.
+- Static files.
 - TLS-ALPN-01 ACME support.
-- Virtual host support.
 - Prometheus stats.
 
+### Todos
+
+- Automated functional/integration testing
+
 ## Installation
+
+### Release Binaries
+
+Tarballs are available on the [Github release page](https://github.com/tarka/vicarian/releases). 
+These contain binaries, documentation, example configuration files, and an example
+systemd configuration.
 
 ### Install from crates.io
 
@@ -45,16 +59,6 @@ cargo install vicarian
 ```
 
 The binary will be available at `~/.crates/bin/vicarian`.
-
-### Building from Source
-
-```bash
-git clone https://github.com/tarka/vicarian.git
-cd vicarian
-cargo build --release
-```
-
-The binary will be available at `target/release/vicarian`.
 
 ## Running
 
@@ -79,83 +83,36 @@ Let's Encrypt TLS would look like:
 
 ```corn
 {
-  hostname = "your-domain.com"
-  listen = "[::]"  // Listen on all interfaces (IPv4 & IPv6)
+    listen = {
+        addr = "[::]"  // Default; this covers IPv4 & IPv6
+        insecure_port = 80 // Disabled by default, this will redirect to HTTPS
+        tls_port = 443 // Default
+    }
 
-  insecure = {
-      port = 80    // HTTP port (default)
-      redirect = true  // Redirect HTTP to HTTPS
-  }
+    vhosts = [
+        {
+            hostname = "example.com"
 
-  tls = {
-    port = 443  // HTTPS port (default)
-    config = {
-      acme = {
-        acme_provider = "letsencrypt"
-        contact = "admin@your-domain.com"
-        challenge = {
-          type = "http-01"
+            tls = {
+                acme = {
+                    contact = "admin@example.com"
+                    challenge.type = "http-01"
+                }
+            }
+
+            backends = [
+                {
+                    context = "/"
+                    url = "http://localhost:8080"
+                }
+                {
+                    context = "/app2"
+                    url = "https://localhost:8443"
+                    trust = true
+                }
+            ]
         }
-      }
-    }
-  }
-
-  backends = [
-    {
-      context = "/"
-      url = "http://localhost:8443"
-      // This service enforces TLS with a self-signed cert, so
-      // we need to disable certificate verification.
-      trust = true
-    }
-    {
-      context = "/copyparty"
-      url = "http://localhost:9090"
-    }
-  ]
-}
-```
-
-### ACME Configuration (Automatic Certificate Management)
-
-To use automatic certificate management with Let's Encrypt:
-
-```corn
-{
-  hostname = "your-domain.com"
-  listen = "[::]"
-
-  insecure = {
-      port = 80
-      redirect = true
-  }
-
-  tls = {
-    port = 443
-    config = {
-      acme = {
-        acme_provider = "letsencrypt"
-        contact = "admin@your-domain.com"
-        challenge = {
-          type = "dns-01"
-          domain = "your-domain.com"
-          dns_provider = {
-            name = "porkbun"  // Or other supported providers
-            // Corn supports reading variables from the environment
-            key = $env_PORKBUN_KEY
-            secret = $env_PORKBUN_SECRET
-          }
-        }
-      }
-    }
-  }
-
-  backends = [
-    {
-      context = "/api"
-      url = "http://localhost:3000"
-    }
-  ]
+    ]
 }
 ```
 

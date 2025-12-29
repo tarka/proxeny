@@ -6,8 +6,7 @@ behave, including TLS settings, backend services, and routing.
 
 ## Basic Structure
 
-A minimal Vicarian configuration file would look something like this (note: it
-could be made smaller, but some defaults have been left in for clarity):
+A minimal Vicarian configuration file would look something like this:
 
 ```corn
 {
@@ -20,10 +19,6 @@ could be made smaller, but some defaults have been left in for clarity):
     vhosts = [
         {
             hostname = "example.com"
-
-            insecure = {
-                redirect = true
-            }
 
             tls = {
                 acme = {
@@ -50,7 +45,7 @@ could be made smaller, but some defaults have been left in for clarity):
 
 ## Configuration Fields
 
-### listen
+### listen (global)
 - **Type**: Object
 - **Optional**: Yes (uses default values if not specified)
 - **Description**: Network listening configuration for the proxy.
@@ -75,21 +70,6 @@ could be made smaller, but some defaults have been left in for clarity):
 - **Default**: Empty array
 - **Description**: Additional domain names that should be handled by this virtual host.
 - **Example**: `aliases = ["www.example.com", "api.example.com"]`
-
-### listen (within vhost)
-- **Type**: String
-- **Default**: `"[::]"`
-- **Description**: The IP address to bind this specific virtual host to. Overrides the global listen.addr if specified.
-- **Examples**:
-  - `listen = "[::]"` (all interfaces)
-  - `listen = "127.0.0.1"` (IPv4 localhost)
-
-### insecure (within vhost)
-- **Type**: Object
-- **Optional**: Yes (if TLS is configured with ACME)
-- **Description**: Configuration for HTTP (non-TLS) connections for this virtual host.
-- **Fields**:
-  - redirect: Whether to redirect HTTP requests to HTTPS (default: true)
 
 ### tls (within vhost)
 - **Type**: Object
@@ -122,35 +102,61 @@ tls = {
 }
 ```
 
+**Fields**:
+- keyfile: Path to the private key file (required)
+- certfile: Path to the certificate file (required)
+- reload: Whether to watch for changes and reload certificates (default: true)
+
 ### TLS with ACME HTTP provisioning
 
 ```corn
 tls = {
   acme = {
+    acme_provider = "letsencrypt"  // Default & only supported provider
     contact = "admin@example.com"
     challenge.type = "http-01"
+    profile = "shortlived"  // or "tlsserver"
+    directory = "/var/lib/vicarian/acme"  // Default
   }
 }
 ```
+
+**Fields**:
+- acme_provider: ACME provider (default: "letsencrypt")
+- contact: Email address for certificate notifications (required)
+- challenge.type: Challenge type - "http-01" or "dns-01" (required)
+- profile: Certificate profile - "shortlived" for short-lived certs, "tlsserver" for long-lived (default: "tlsserver")
+- directory: Directory to store ACME account and certificate data (default: "/var/lib/vicarian/acme")
 
 ### TLS with ACME DNS provisioning
 
 ```corn
 tls = {
   acme = {
-    acme_provider = "letsencrypt"  // Default & only supported provider ATM
+    acme_provider = "letsencrypt"  // Default & only supported provider
     contact = "admin@example.com"
     challenge = {
-      type = "dns-01"  // or "http-01"
+      type = "dns-01"
       dns_provider = {
         name = "porkbun"
         key = $env_PORKBUN_KEY
         secret = $env_PORKBUN_SECRET
       }
     }
+    profile = "tlsserver"
   }
 }
 ```
+
+**Fields**:
+- acme_provider: ACME provider (default: "letsencrypt")
+- contact: Email address for certificate notifications (required)
+- challenge.type: Challenge type - must be "dns-01" for DNS challenges
+- challenge.dns_provider: DNS provider configuration (required for DNS-01)
+  - name: DNS provider name (e.g., "porkbun")
+  - key: API key for the DNS provider
+  - secret: API secret for the DNS provider
+- profile: Certificate profile - "shortlived" or "tlsserver" (default: "tlsserver")
 
 ## Backend Configuration
 
@@ -171,10 +177,9 @@ Each backend entry has the following fields:
 - **Default**: false
 - **Description**: Set to true if the backend uses a self-signed certificate or certificate that can't be verified by the system's CA store.
 
-
 ## Additional Configuration Options
 
-### dev_mode
+### dev_mode (global)
 - **Type**: Boolean
 - **Default**: false
 - **Description**: Enables development mode with relaxed security settings. This should not be used in production environments.
@@ -182,3 +187,13 @@ Each backend entry has the following fields:
 ## Environment Variables
 
 Configuration supports environment variable substitution using the `$env_VARIABLE_NAME` syntax. This allows sensitive information like API keys to be kept out of configuration files.
+
+```corn
+let {
+    $env_PORKBUN_KEY = "fallback value"
+    $env_PORKBUN_SECRET = "fallback value"
+
+} in {
+    // Configuration here can use $env_VARIABLE_NAME
+}
+```
