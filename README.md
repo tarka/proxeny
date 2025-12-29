@@ -21,7 +21,9 @@ platforms is welcome.
 
 - **Multiple HTTP and HTTPS backend**: Route traffic to multiple backend services based on URL
   contexts
-- **Basic path rewriting**
+- **Basic path rewriting**: This may work with some simple apps that don't
+  support contexts natively, but is likely to fail with more complex apps that
+  have hardcoded paths.
 - **Dynamic Certificate Loading**: Externally provided TLS certificates are
   monitored and reloaded on update.
 - **ACME Support**: Automatic certificate issuance and renewal via ACME
@@ -29,7 +31,12 @@ platforms is welcome.
 - **Multiple DNS Providers**: Multiple DNS providers for ACME are supported via
   the [zone-update](https://github.com/tarka/zone-update/) project. See that
   project for a list of supported providers.
-- **Virtual hosts**.
+- **Virtual hosts**
+
+### Todos
+
+- Automated functional/integration testing
+- Access logs
 
 ### Possible Future Features
 
@@ -40,9 +47,10 @@ resources.
 - TLS-ALPN-01 ACME support.
 - Prometheus stats.
 
-### Todos
+### Probably-not features
 
-- Automated functional/integration testing
+- Load-balancing, round-robin, etc.
+- Advanced connection tuning
 
 ## Installation
 
