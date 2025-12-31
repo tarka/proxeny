@@ -30,19 +30,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            shortarch: linux-amd64
             os: ubuntu-22.04
 
           - target: aarch64-unknown-linux-gnu
-            shortarch: linux-arm64
             os: ubuntu-22.04-arm
-
-          # - target: aarch64-apple-darwin
-          #   shortarch: macos-amd64
-          #   os: macos-14
-
-          # - target: x86_64-unknown-freebsd
-          #   os: ubuntu-22.04
 
     timeout-minutes: 60
     steps:
@@ -71,7 +62,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
           tar: all
-          archive: $bin-$tag-${{ matrix.shortarch }}
+          archive: $bin-$tag-${{ matrix.target }}
           leading-dir: true
           bin-leading-dir: bin
           include: LICENSE,README.md,CONFIGURATION.md,etc

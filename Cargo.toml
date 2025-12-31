@@ -67,6 +67,9 @@ test-log = { version = "0.2.19", features = ["trace"] }
 time = { version = "0.3.44", features = ["macros"] }
 tokio = { version = "1.48.0", features = ["fs"] }
 
+[package.metadata.binstall]
+bin-dir = "{ name }-v{ version }-{ target }/bin/{ bin }{ binary-ext }"
+
 [package.metadata.bacon]
 apply_gitignore = false
 watch = ["vicarian.corn"]
