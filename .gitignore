@@ -4,3 +4,4 @@
 /*.corn
 .envrc
 *~
+/.dir-locals.el
