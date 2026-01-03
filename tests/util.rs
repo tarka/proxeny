@@ -1,36 +1,77 @@
-#![allow(dead_code)]
 
 use std::{
+    fs::{File, copy},
     process::{
         Child,
         Command
-    },
-    sync::OnceLock
+    }
 };
 use std::thread;
 use std::time::Duration;
 
-use ctor::dtor;
+use anyhow::{Result, anyhow, bail};
+use camino::Utf8PathBuf;
 use nix::{sys::signal::{Signal, kill}, unistd::Pid};
 use reqwest::{blocking::Client, redirect};
-use test_context::TestContext;
+use tempfile::{TempDir, tempdir_in};
 use tracing_log::log::info;
 
-static PROXY: OnceLock<Child> = OnceLock::new();
+pub const PROXY_PORT: u16 = 8080;
+pub const PROXY_TLS_PORT: u16 = 8443;
 
-const PROXY_PORT: u16 = 8080;
-const PROXY_TLS_PORT: u16 = 8443;
+pub struct Proxy {
+    pub dir: TempDir,
+    pub config: Option<Utf8PathBuf>,
+    pub process: Option<Child>,
+    pub keep_files: bool,
+}
 
-pub fn run_proxy() -> &'static Child {
-    PROXY.get_or_init(|| {
+impl Proxy {
+    pub fn new() -> Self {
+        let dir = tempdir_in("target/test_runs").unwrap();
+        Self {
+            dir,
+            config: None,
+            process: None,
+            keep_files: false,
+        }
+    }
+
+    pub fn with_simple_config(& mut self, confname: &str) -> &mut Self {
+        let path = format!("tests/data/config/{confname}.corn");
+        self.config = Some(Utf8PathBuf::from(path));
+        self
+    }
+
+    pub fn run(&mut self) -> Result<&mut Self> {
+        if self.config.is_none() {
+            bail!("No config provided")
+        }
+        self.process = Some(self.run_proxy()?);
+        Ok(self)
+    }
+
+    fn run_proxy(&self) -> Result<Child> {
         info!("Starting Test Proxy");
         let exe = env!("CARGO_BIN_EXE_vicarian");
 
+        let out_file = self.dir.path().join("stdout");
+        let err_file = self.dir.path().join("stderr");
+        let stdout = File::create(out_file)?;
+        let stderr = File::create(err_file)?;
+
+        // Checked above
+        let config = self.config.as_ref().unwrap();
+        let fname = config.components().last().ok_or(anyhow!("No filename"))?;
+        let copied = self.dir.path().join(fname);
+        copy(&config, copied).unwrap();
+
         let child = Command::new(exe)
             .arg("-vv")
-            .arg("-c").arg("vicarian.corn")
-            .spawn()
-            .expect("Failed to start proxy");
+            .arg("-c").arg(config)
+            .stdout(stdout)
+            .stderr(stderr)
+            .spawn()?;
 
         for _ in 0..20 { // 2 second timeout
             // Look for a redirect from the non-TLS port.
@@ -43,46 +84,29 @@ pub fn run_proxy() -> &'static Child {
 
             if ready {
                 info!("Test Proxy Ready");
-                return child;
+                return Ok(child);
             }
             thread::sleep(Duration::from_millis(100));
         }
-        panic!("Failed to start proxy server")
-
-    })
-}
-
-#[dtor]
-fn proxy_cleanup() {
-    child_cleanup(PROXY.get());
-}
-
-fn child_cleanup(possible_child: Option<&Child>) {
-    // Make sure the server is shut down. This is a little hacky, but
-    // seems to be the only reliable method for a global processs in
-    // rust tests.
-    if let Some(child) = possible_child {
-        let pid = Pid::from_raw(child.id().try_into().unwrap());
-        kill(pid, Signal::SIGINT).unwrap();
-        // Last as we don't know if stdout will work
-        println!("Killed process {}", pid);
+        bail!("Failed to start proxy server")
     }
-}
 
-pub struct IntegrationTest {
-    pub proxy: &'static Child,
-}
-
-impl TestContext for IntegrationTest {
-    fn setup() -> Self {
-        let proxy = run_proxy();
-        Self {
-            proxy: &proxy,
+    fn child_cleanup(&self) {
+        if let Some(proc) = &self.process {
+            let pid = Pid::from_raw(proc.id().try_into().unwrap());
+            kill(pid, Signal::SIGINT).unwrap();
+            println!("Killed process {}", pid);
         }
     }
 
-    fn teardown(self) {
-        // Handled via dtor above when process exits
+    pub fn keep_files(&mut self) {
+        self.keep_files = true;
+    }
+}
+
+impl Drop for Proxy {
+    fn drop(&mut self) {
+        self.child_cleanup();
     }
 }
 
