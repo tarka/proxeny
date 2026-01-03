@@ -1,7 +1,7 @@
+#![allow(unused)]
 
 use std::{
-    fs::{File, copy, create_dir_all},
-    process::{
+    fs::{File, copy, create_dir_all}, net::TcpStream, process::{
         Child,
         Command
     }
@@ -16,8 +16,8 @@ use reqwest::{blocking::Client, redirect};
 use tempfile::{TempDir, tempdir_in};
 use tracing_log::log::info;
 
-pub const PROXY_PORT: u16 = 8080;
-pub const PROXY_TLS_PORT: u16 = 8443;
+pub const INSECURE_PORT: u16 = 8080;
+pub const TLS_PORT: u16 = 8443;
 
 pub struct ProxyBuilder {
     pub dir: TempDir,
@@ -83,15 +83,10 @@ impl ProxyBuilder {
             .spawn()?;
 
         for _ in 0..20 { // 2 second timeout
-            // Look for a redirect from the non-TLS port.
-            let ready = Client::builder()
-                .redirect(redirect::Policy::none())
-                .build().unwrap()
-                .get(format!("http://localhost:{PROXY_PORT}/status"))
-                .send()
-                .is_ok_and(|r| r.status().as_u16() == 301);
+            let conn1 = TcpStream::connect(format!("localhost:{INSECURE_PORT}"));
+            let conn2 = TcpStream::connect(format!("localhost:{TLS_PORT}"));
 
-            if ready {
+            if conn1.is_ok() && conn2.is_ok() {
                 info!("Test Proxy Ready");
                 return Ok(child);
             }
