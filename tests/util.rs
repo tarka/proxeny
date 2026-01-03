@@ -1,6 +1,6 @@
 
 use std::{
-    fs::{File, copy},
+    fs::{File, copy, create_dir_all},
     process::{
         Child,
         Command
@@ -19,36 +19,45 @@ use tracing_log::log::info;
 pub const PROXY_PORT: u16 = 8080;
 pub const PROXY_TLS_PORT: u16 = 8443;
 
-pub struct Proxy {
+pub struct ProxyBuilder {
     pub dir: TempDir,
     pub config: Option<Utf8PathBuf>,
-    pub process: Option<Child>,
-    pub keep_files: bool,
 }
 
-impl Proxy {
+pub struct Proxy {
+    pub dir: TempDir,
+    pub config: Utf8PathBuf,
+    pub process: Child,
+    keep_files: bool,
+}
+
+impl ProxyBuilder {
     pub fn new() -> Self {
+        create_dir_all("target/test_runs").unwrap();
         let dir = tempdir_in("target/test_runs").unwrap();
         Self {
             dir,
             config: None,
-            process: None,
-            keep_files: false,
         }
     }
 
-    pub fn with_simple_config(& mut self, confname: &str) -> &mut Self {
+    pub fn with_simple_config(mut self, confname: &str) -> Self {
         let path = format!("tests/data/config/{confname}.corn");
         self.config = Some(Utf8PathBuf::from(path));
         self
     }
 
-    pub fn run(&mut self) -> Result<&mut Self> {
+    pub fn run(self) -> Result<Proxy> {
         if self.config.is_none() {
             bail!("No config provided")
         }
-        self.process = Some(self.run_proxy()?);
-        Ok(self)
+        let process = self.run_proxy()?;
+        Ok(Proxy {
+            dir: self.dir,
+            config: self.config.unwrap(),
+            process,
+            keep_files: false,
+        })
     }
 
     fn run_proxy(&self) -> Result<Child> {
@@ -90,17 +99,18 @@ impl Proxy {
         }
         bail!("Failed to start proxy server")
     }
+}
 
+impl Proxy {
     fn child_cleanup(&self) {
-        if let Some(proc) = &self.process {
-            let pid = Pid::from_raw(proc.id().try_into().unwrap());
-            kill(pid, Signal::SIGINT).unwrap();
-            println!("Killed process {}", pid);
-        }
+        let pid = Pid::from_raw(self.process.id().try_into().unwrap());
+        kill(pid, Signal::SIGINT).unwrap();
+        println!("Killed process {}", pid);
     }
 
     pub fn keep_files(&mut self) {
         self.keep_files = true;
+        self.dir.disable_cleanup(true);
     }
 }
 
