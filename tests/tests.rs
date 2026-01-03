@@ -12,10 +12,9 @@ use crate::util::{ProxyBuilder, INSECURE_PORT, TLS_PORT};
 #[test]
 #[serial]
 fn test_redirect_http() -> Result<()> {
-    let mut _proxy = ProxyBuilder::new()
+    let _proxy = ProxyBuilder::new()
         .with_simple_config("example_com_simple")
         .run()?;
-    _proxy.keep_files();
 
     // Look for a redirect from the non-TLS port.
     let ready = Client::builder()

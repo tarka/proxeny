@@ -4,7 +4,7 @@ use std::{
     fs::{File, copy, create_dir_all}, net::TcpStream, process::{
         Child,
         Command
-    }
+    }, thread::panicking
 };
 use std::thread;
 use std::time::Duration;
@@ -111,6 +111,9 @@ impl Proxy {
 
 impl Drop for Proxy {
     fn drop(&mut self) {
+        if panicking() {
+            self.dir.disable_cleanup(true);
+        }
         self.child_cleanup();
     }
 }
