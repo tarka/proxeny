@@ -1,5 +1,3 @@
-mod util;
-
 
 use anyhow::Result;
 use reqwest::{blocking::Client, redirect};
@@ -8,7 +6,6 @@ use test_log::test;
 
 use crate::util::{ProxyBuilder, INSECURE_PORT, TLS_PORT};
 
-#[cfg_attr(not(feature = "integration_tests"), ignore = "Integration Test")]
 #[test]
 #[serial]
 fn test_redirect_http() -> Result<()> {
