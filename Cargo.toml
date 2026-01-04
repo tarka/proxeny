@@ -67,6 +67,7 @@ test-context = "0.5.4"
 test-log = { version = "0.2.19", features = ["trace"] }
 time = { version = "0.3.44", features = ["macros"] }
 tokio = { version = "1.48.0", features = ["fs"] }
+wiremock = "0.6.5"
 
 [package.metadata.binstall]
 bin-dir = "{ name }-v{ version }-{ target }/bin/{ bin }{ binary-ext }"
