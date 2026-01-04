@@ -12,7 +12,7 @@ use std::time::Duration;
 use anyhow::{Result, anyhow, bail};
 use camino::Utf8PathBuf;
 use nix::{sys::signal::{Signal, kill}, unistd::Pid};
-use reqwest::{blocking::Client, redirect};
+use reqwest::{Certificate, blocking::Client, redirect};
 use tempfile::{TempDir, tempdir_in};
 use tracing_log::log::info;
 
@@ -76,7 +76,7 @@ impl ProxyBuilder {
         copy(&config, copied).unwrap();
 
         let child = Command::new(exe)
-            .arg("-vv")
+            .arg("-vvv")
             .arg("-c").arg(config)
             .stdout(stdout)
             .stderr(stderr)
@@ -118,6 +118,13 @@ impl Drop for Proxy {
     }
 }
 
+pub fn mkcert_root() -> Result<Certificate> {
+    let home = std::env::var("HOME")?;
+    let certroot = Utf8PathBuf::from(home)
+        .join(".local/share/mkcert/rootCA.pem");
+    let pem = std::fs::read(certroot)?;
+    Ok(reqwest::Certificate::from_pem(&pem)?)
+}
 
 // pub struct MockBackend {
 //     pub handle: JoinHandle<Result<(), std::io::Error>>,
