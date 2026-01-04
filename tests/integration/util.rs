@@ -1,11 +1,7 @@
 #![allow(unused)]
 
-use std::{
-    fs::{File, copy, create_dir_all}, net::TcpStream, process::{
-        Child,
-        Command
-    }, thread::panicking
-};
+use std::process::Stdio;
+use std::thread::panicking;
 use std::thread;
 use std::time::Duration;
 
@@ -14,6 +10,9 @@ use camino::Utf8PathBuf;
 use nix::{sys::signal::{Signal, kill}, unistd::Pid};
 use reqwest::{Certificate, blocking::Client, redirect};
 use tempfile::{TempDir, tempdir_in};
+use tokio::fs::{File, copy, create_dir_all};
+use tokio::net::TcpStream;
+use tokio::process::{Child, Command};
 use tracing_log::log::info;
 
 pub const INSECURE_PORT: u16 = 8080;
@@ -32,8 +31,8 @@ pub struct Proxy {
 }
 
 impl ProxyBuilder {
-    pub fn new() -> Self {
-        create_dir_all("target/test_runs").unwrap();
+    pub async fn new() -> Self {
+        create_dir_all("target/test_runs").await.unwrap();
         let dir = tempdir_in("target/test_runs").unwrap();
         Self {
             dir,
@@ -47,11 +46,11 @@ impl ProxyBuilder {
         self
     }
 
-    pub fn run(self) -> Result<Proxy> {
+    pub async fn run(self) -> Result<Proxy> {
         if self.config.is_none() {
             bail!("No config provided")
         }
-        let process = self.run_proxy()?;
+        let process = self.run_proxy().await?;
         Ok(Proxy {
             dir: self.dir,
             config: self.config.unwrap(),
@@ -60,31 +59,32 @@ impl ProxyBuilder {
         })
     }
 
-    fn run_proxy(&self) -> Result<Child> {
+    async fn run_proxy(&self) -> Result<Child> {
         info!("Starting Test Proxy");
         let exe = env!("CARGO_BIN_EXE_vicarian");
 
         let out_file = self.dir.path().join("stdout");
         let err_file = self.dir.path().join("stderr");
-        let stdout = File::create(out_file)?;
-        let stderr = File::create(err_file)?;
+        let stdout = File::create(out_file).await?;
+        let stderr = File::create(err_file).await?;
+
 
         // Checked above
         let config = self.config.as_ref().unwrap();
         let fname = config.components().last().ok_or(anyhow!("No filename"))?;
         let copied = self.dir.path().join(fname);
-        copy(&config, copied).unwrap();
+        copy(&config, copied).await.unwrap();
 
         let child = Command::new(exe)
             .arg("-vvv")
             .arg("-c").arg(config)
-            .stdout(stdout)
-            .stderr(stderr)
+            .stdout(stdout.into_std().await)
+            .stderr(stderr.into_std().await)
             .spawn()?;
 
         for _ in 0..20 { // 2 second timeout
-            let conn1 = TcpStream::connect(format!("localhost:{INSECURE_PORT}"));
-            let conn2 = TcpStream::connect(format!("localhost:{TLS_PORT}"));
+            let conn1 = TcpStream::connect(format!("localhost:{INSECURE_PORT}")).await;
+            let conn2 = TcpStream::connect(format!("localhost:{TLS_PORT}")).await;
 
             if conn1.is_ok() && conn2.is_ok() {
                 info!("Test Proxy Ready");
@@ -98,7 +98,7 @@ impl ProxyBuilder {
 
 impl Proxy {
     fn child_cleanup(&self) {
-        let pid = Pid::from_raw(self.process.id().try_into().unwrap());
+        let pid = Pid::from_raw(self.process.id().unwrap().try_into().unwrap());
         kill(pid, Signal::SIGINT).unwrap();
         println!("Killed process {}", pid);
     }
