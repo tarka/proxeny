@@ -15,7 +15,7 @@ StateDirectoryMode=0750
 ConfigurationDirectory=vicarian
 ConfigurationDirectoryMode=0750
 
-ExecStart=/opt/vicarian/bin/vicarian -v
+ExecStart=/usr/bin/vicarian -v
 
 ; Use graceful shutdown with a reasonable timeout
 KillMode=mixed
