@@ -17,13 +17,13 @@ license = "Apache-2.0"
 anyhow = "1.0.104"
 async-trait = "0.1.91"
 bytes = "1.12.1"
-camino = { version = "1.2.4", features = ["serde1"] }
-clap = { version = "4.6.3", features = ["derive"] }
+camino = { version = "1.2.5", features = ["serde1"] }
+clap = { version = "4.6.5", features = ["derive"] }
 dnsclient = "0.2.0"
 fastrand = "2.5.0"
 futures = "0.3.33"
 futures-lite = "2.6.1"
-http = "1.4.2"
+http = "1.5.0"
 http-body-util = "0.1.4"
 http-serde = "2.1.1"
 hyper = "1.11.0"
@@ -43,14 +43,13 @@ pingora-boringssl = "0.8.1"
 pingora-core = { version = "0.8.1", features = ["boringssl"] }
 pingora-http = "0.8.1"
 pingora-proxy = "0.8.1"
-psl = "2.1.219"
-rustls = "0.23.42"
+psl = "2.1.223"
+rustls = "0.23.43"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_default_utils = { version = "0.3.1", features = ["inline"] }
 serde_json = "1.0.151"
-# Pre-V3 fork; update when upstream releases
-static-web-server-vicarian = {
-    version = "3.0.0-vicarian.1",
+static-web-server = {
+    version = "3.0.0-beta.1",
     default-features = false,
     features = ["directory-listing", "fallback-page"]
 }
@@ -71,10 +70,10 @@ integration_tests = []
 [dev-dependencies]
 fslock = "0.2.1"
 nix = { version = "0.31.3", features = ["process", "signal", "term"] }
-pem = "3.0.6"
+pem = "4.0.0"
 rcgen = { version = "0.14.8", features = ["x509-parser"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["http2", "rustls"] }
-serial_test = "3.5.0"
+serial_test = "4.0.1"
 tempfile = "3.27.0"
 test-log = { version = "0.2.21", features = ["trace"] }
 time = { version = "0.3.54", features = ["macros"] }
