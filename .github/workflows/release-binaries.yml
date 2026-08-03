@@ -49,7 +49,7 @@ jobs:
           cp systemd/vicarian.service etc/systemd/system/
           cp -r examples/ etc/vicarian/examples
           cp examples/vicarian-tls-files.corn etc/vicarian/vicarian.corn
-          cp systemd/sercrets etc/vicarian/secrets
+          cp systemd/secrets etc/vicarian/secrets
           chmod o-rwx etc/vicarian/secrets
 
       - uses: dtolnay/rust-toolchain@stable
