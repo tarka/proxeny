@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/tarka/vicarian/compare/v0.3.0...v0.3.1) - 2026-08-03
+
+- Add build and upload of .deb packages.
+
+### <!-- 3 -->Documentation
+
+- Add basic static file config example.
+- Change AI/LLM policy to "none"
+
+### Other
+
+- Add support for building .deb packages with cargo-deb
+- Add simple inline SVG favicon.
+- Update dependencies, and move the the now-beta upstream static-web-server
+
 ## [0.3.0](https://github.com/tarka/vicarian/compare/v0.2.6...v0.3.0) - 2026-07-21
 
 ### <!-- 1 -->Features
