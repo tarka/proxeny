@@ -1,6 +1,6 @@
 [package]
 name = "vicarian"
-description = "Vicarian is a reverse proxy server with ACME support"
+description = "Vicarian is a TLS-first reverse-proxy server with ACME support"
 version = "0.3.0"
 edition = "2024"
 
@@ -90,6 +90,30 @@ codegen-units = 1
 
 [lints.clippy]
 unused_unit = "allow"
+
+[package.metadata.deb]
+extended-description = """\
+Vicarian is a TLS-first reverse proxy server with built-in
+ACME/LetsEncrypt support (HTTP-01 and DNS-01). It also
+supports native static file serving."""
+section = "Network"
+maintainer-scripts = "systemd"
+assets = [
+    ["target/release/vicarian", "usr/bin/", "755"],
+    ["examples/vicarian-static.corn", "etc/vicarian/vicarian.corn", "644"],
+    ["CHANGELOG.md", "usr/share/doc/vicarian/", "644"],
+    ["CONFIGURATION.md", "usr/share/doc/vicarian/", "644"],
+    ["METRICS.md", "usr/share/doc/vicarian/", "644"],
+    ["LICENSE", "usr/share/doc/vicarian/", "644"],
+    ["README.md", "usr/share/doc/vicarian/", "644"],
+    ["SECURITY.md", "usr/share/doc/vicarian/", "644"],
+    ["examples/*", "usr/share/doc/vicarian/examples/", "644"],
+    ["systemd/secrets", "etc/vicarian/", "640"],
+]
+[package.metadata.deb.systemd-units]
+unit-scripts = "systemd"
+enable = true
+start = true
 
 [package.metadata.binstall]
 bin-dir = "{ name }-v{ version }-{ target }/bin/{ bin }{ binary-ext }"
