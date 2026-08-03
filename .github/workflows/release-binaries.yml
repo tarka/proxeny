@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 jobs:
-  upload-assets:
+  upload-tarball:
     name: ${{ matrix.shortname }}
     if: github.repository_owner == 'tarka'
     runs-on: ${{ matrix.os }}
@@ -66,3 +66,42 @@ jobs:
           bin-leading-dir: bin
           include: LICENSE,README.md,CONFIGURATION.md,etc
 
+  upload-debs:
+    name: ${{ matrix.shortname }}
+    if: github.repository_owner == 'tarka'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+
+    timeout-minutes: 60
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: Build .deb
+        run: cargo deb -v
+
+      - name: Upload .deb
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/debian/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
