@@ -125,6 +125,22 @@ systemd configuration:
 └── README.md
 ```
 
+### Packages
+
+Debian & Ubuntu packages are available from
+[vicarian.org](https://vicarian.org/debian/):
+
+    # 1. Download the repository key:
+    curl -fsSL https://vicarian.org/debian/vicarian-repo.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/vicarian-repo-archive-keyring.gpg
+
+    # 2. Add the APT source
+    echo "deb [signed-by=/etc/apt/keyrings/vicarian-repo-archive-keyring.gpg] https://vicarian.org/debian stable main" | sudo tee /etc/apt/sources.list.d/vicarian.list
+
+    # 3. Update package lists
+    sudo apt update
+
+    # 4. Install Vicarian
+    sudo apt install vicarian
 
 ### Install from crates.io
 

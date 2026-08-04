@@ -28,7 +28,6 @@ http-body-util = "0.1.4"
 http-serde = "2.1.1"
 hyper = "1.11.0"
 instant-acme = { version = "0.8.5", features = ["time"] }
-
 itertools = "0.15.0"
 libcorn = "0.10.1"
 metrics = "0.24.6"
@@ -110,6 +109,7 @@ assets = [
     ["examples/*", "usr/share/doc/vicarian/examples/", "644"],
     ["systemd/secrets", "etc/vicarian/", "640"],
 ]
+
 [package.metadata.deb.systemd-units]
 unit-scripts = "systemd"
 enable = true
