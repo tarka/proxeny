@@ -4271,7 +4271,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -5621,9 +5621,9 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zone-update"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be78d6598c181ad4ffc873b534843b3fdf9e92ddde6cb03b9c5dcf69c366807"
+checksum = "a74ab474c086eb95b6602ecdcdb431bffa615fa15dffc83816732934b28dc307"
 dependencies = [
  "async-trait",
  "blocking",

@@ -483,7 +483,7 @@ impl AcmeRuntime {
                 let dns_client = get_dns_client(acme_host, provider);
                 dns_client.create_txt_record(&txt_name, &token).await?;
 
-                wait_for_dns(&txt_fqdn).await?;
+                wait_for_dns(&txt_fqdn, &token).await?;
             }
             AcmeChallenge::Http01 => {
                 let fqdn = challenge.identifier().to_string();
@@ -508,8 +508,6 @@ impl AcmeRuntime {
                     let txt_name = to_txt_name(&acme_host.domain, hostname);
 
                     info!("Attempting cleanup of {txt_name} record");
-                    // FIXME: Doesn't handle multiple records currently. We need to
-                    // add this to zone-update.
                     let dns_client = get_dns_client(acme_host, provider);
                     match dns_client.delete_all_records(RecordType::TXT, &txt_name).await {
                         Ok(_) => (),
@@ -574,7 +572,7 @@ impl From<&AcmeChallenge> for ChallengeType {
 }
 
 
-async fn wait_for_dns(txt_fqdn: &String) -> Result<()> {
+async fn wait_for_dns(txt_fqdn: &str, token: &str) -> Result<()> {
     info!("Waiting for record {txt_fqdn} to go live");
 
     // TODO: For now we use a 'known good' DNS server for now to avoid
@@ -585,11 +583,19 @@ async fn wait_for_dns(txt_fqdn: &String) -> Result<()> {
 
     for _i in 0..30 {
         debug!("Lookup for {txt_fqdn}");
-        let txts = lookup.query_txt(txt_fqdn).await?;
-        if ! txts.is_empty() {
-            info!("Found {txt_fqdn}");
-            return Ok(());
+        let txts = lookup.query_txt(txt_fqdn).await?
+            .iter()
+            .map(|v| String::from_utf8_lossy(v).into_owned())
+            .collect::<Vec<String>>();
+
+        for dns_tok in txts {
+            if dns_tok == token {
+                info!("Found {txt_fqdn} -> {dns_tok}");
+                return Ok(());
+            }
+            warn!("Non-matching token for {txt_fqdn}: {dns_tok}");
         }
+
         tokio::time::sleep(ONE_SECOND.try_into()?).await;
     }
 
