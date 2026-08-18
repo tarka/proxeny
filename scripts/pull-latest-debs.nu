@@ -51,6 +51,9 @@ for needed in $needed_vers {
 log info "Adding downloaded debs to repo..."
 aptly repo add vicarian $tmpdir
 
+log info "Updating repo"
+aptly publish update stable
+
 log info "Cleaning up temp directory"
 rm --permanent --recursive --force $tmpdir
 
