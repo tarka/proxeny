@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3](https://github.com/tarka/vicarian/compare/v0.3.2...v0.3.3) - 2026-08-18
+
+### <!-- 1 -->Bug Fixes
+
+- *(acme)* Add additional record test when polling DNS to ensure we have the right entry.
+- *(acme)* Delete all matching DNS-01 ACME records on cleanup to prevent a pile-up of stale entries.
+
+### <!-- 3 -->Documentation
+
+- Simplify deb instructions.
+- Add instructions for Debian package installation.
+
+### Other
+
+- Update to latest zone-update, and other dependencies.
+
 ## [0.3.2](https://github.com/tarka/vicarian/compare/v0.3.1...v0.3.2) - 2026-08-03
 
 ### Other
