@@ -1,3 +1,4 @@
+
 [Unit]
 Description=Run Aptly update script
 
@@ -5,5 +6,4 @@ Description=Run Aptly update script
 Type=oneshot
 WorkingDirectory=/var/lib/aptly/vicarian
 User=aptly
-ExecStartPre=git pull
 ExecStart=/var/lib/aptly/.cargo/bin/nu scripts/pull-latest-debs.nu
