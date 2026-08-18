@@ -17,7 +17,7 @@ use tokio::{
 };
 use time::{Duration, OffsetDateTime, UtcOffset};
 use tracing_log::log::{debug, error, info, warn};
-use zone_update::async_impl::AsyncDnsProvider;
+use zone_update::{RecordType, async_impl::AsyncDnsProvider};
 
 use crate::{
     RunContext,
@@ -511,7 +511,7 @@ impl AcmeRuntime {
                     // FIXME: Doesn't handle multiple records currently. We need to
                     // add this to zone-update.
                     let dns_client = get_dns_client(acme_host, provider);
-                    match dns_client.delete_txt_record(&txt_name).await {
+                    match dns_client.delete_all_records(RecordType::TXT, &txt_name).await {
                         Ok(_) => (),
                         Err(d_err) => {
                             warn!("Failed to delete DNS record {txt_name}: {d_err}");
