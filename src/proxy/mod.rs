@@ -1,4 +1,5 @@
 mod cleartext;
+mod mimetypes;
 mod router;
 mod services;
 mod r#static;

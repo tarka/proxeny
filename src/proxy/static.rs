@@ -31,7 +31,7 @@ impl StaticHandler {
             root_dir: backend.static_root.clone()
                 .expect("No static root; should be caught in config")
                 .into_std_path_buf(),
-            compression: false,
+            compression: true,
             dir_listing: true,
             page_fallback: fallback_page,
             redirect_trailing_slash: true,
@@ -61,6 +61,7 @@ impl Handler for StaticHandler {
         let mut header = ResponseHeader::from(rparts);
         header.insert_header(VIA, HeaderValue::from_static("1.1 Vicarian"))?;
         header.insert_header(STRICT_TRANSPORT_SECURITY, HeaderValue::from_static("max-age=31536000; includeSubDomains"))?;
+
         session.write_response_header(Box::new(header), false).await?;
 
         if !is_head {

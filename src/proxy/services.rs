@@ -8,9 +8,7 @@ use http::{
 };
 use metrics::counter;
 use pingora_core::{
-    ErrorType, OkOrErr, OrErr,
-    modules::http::{HttpModules, compression::ResponseCompressionBuilder},
-    prelude::HttpPeer,
+    ErrorType, OkOrErr, OrErr, modules::http::compression::ResponseCompression, prelude::HttpPeer,
     upstreams::peer::Peer,
 };
 use pingora_http::{RequestHeader, ResponseHeader};
@@ -26,11 +24,12 @@ use crate::{
         MetricsHandler,
     },
     proxy::{
-        E401, E404, E500, Handler, router::{Router, RouterBackend},
+        E401, E404, E500, Handler,
+        mimetypes::is_compressible,
+        router::{Router, RouterBackend},
         r#static::StaticHandler,
     },
 };
-
 
 const YEAR_IN_SECS: u64 = 31536000;
 
@@ -303,16 +302,21 @@ impl ProxyHttp for Vicarian {
         Ok(())
     }
 
-    fn init_downstream_modules(&self, mods: &mut HttpModules) {
-        // Enable compression
-        mods.add_module(ResponseCompressionBuilder::enable(3));
-    }
-
     async fn response_filter(&self, session: &mut Session,
                              upstream_response: &mut ResponseHeader,
                              _ctx: &mut Self::CTX)
                              -> pingora_core::Result<()>
     {
+        if let Some(comp_mod) = session.downstream_modules_ctx.get_mut::<ResponseCompression>() {
+            if is_compressible(&upstream_response.headers) {
+                comp_mod.adjust_level(3);
+                let req_header = session.downstream_session.req_header();
+                comp_mod.request_filter(req_header);
+            } else {
+                comp_mod.adjust_level(0);
+            }
+        }
+
         let hsts = format!("max-age={YEAR_IN_SECS}; includeSubDomains");
         upstream_response.insert_header(STRICT_TRANSPORT_SECURITY, hsts)?;
 

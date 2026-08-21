@@ -47,7 +47,7 @@ rustls = "0.23.43"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_default_utils = { version = "0.3.1", features = ["inline"] }
 serde_json = "1.0.151"
-static-web-server = { version = "3.0.0-beta.1", default-features = false, features = ["directory-listing", "fallback-page"] }
+static-web-server = { version = "3.0.0-beta.1", default-features = false, features = ["compression", "directory-listing", "fallback-page"] }
 strum_macros = "0.28.0"
 thiserror = "2.0.20"
 time = { version = "0.3.55", features = ["local-offset"] }

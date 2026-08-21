@@ -5,6 +5,7 @@ mod certutils;
 #[path = "../utils/proxy.rs"]
 mod proxyutils;
 mod static_files;
+mod sse;
 mod websockets;
 
 use http::header::{AUTHORIZATION, HOST};
