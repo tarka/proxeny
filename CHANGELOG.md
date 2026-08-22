@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4](https://github.com/tarka/vicarian/compare/v0.3.3...v0.3.4) - 2026-08-22
+
+### <!-- 1 -->Bug Fixes
+
+- *(proxy)* Handle `Cache-Control: no-transform` and `X-Accel-Buffering` when enabling compression.
+- *(proxy)* Some types, notably text/event-stream, don't handle compression. Import the mime-db whitelist and enable/disable compression as appropriate.
+
+### <!-- 3 -->Documentation
+
+- Minor readme cleanup.
+
+### Other
+
+- Minor dependency update
+- We need to publish after the repo update.
+- Remove git pull as it adds complications
+- Add aptly user to script
+- Add aptly timer/service combo for repo.
+- Add basic nushell script to fetch latest .debs from github and add to the repo.
+
 ## [0.3.3](https://github.com/tarka/vicarian/compare/v0.3.2...v0.3.3) - 2026-08-18
 
 ### <!-- 1 -->Bug Fixes
