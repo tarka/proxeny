@@ -1,12 +1,11 @@
 use http::{
-    HeaderMap, HeaderValue,
-    header::{CONTENT_ENCODING, CONTENT_TYPE},
+    HeaderMap, HeaderValue, header::{CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 };
 
 // Compressible mime-types; generated from mime-db:
 //
 //     curl -fsSL "https://raw.githubusercontent.com/jshttp/mime-db/refs/heads/master/src/custom-types.json" \
-//         | jq -r 'to_entries[] | select(.value.compressible == true) | .key'
+//         | jq -r 'to_entries[] | select(.value.compressible == true) | .key' \
 //         | sort
 //
 const COMPRESSIBLE: &[&str] = &[
@@ -84,20 +83,41 @@ const COMPRESSIBLE: &[&str] = &[
     "x-shader/x-vertex",
 ];
 
+const IDENTITY_ENC: &str = "identity";
+const NO_TRANSFORM: &str = "no-transform";
+const X_ACCEL_BUFFERING: &str = "x-accel-buffering";
+
 
 pub fn is_compressible(headers: &HeaderMap<HeaderValue>) -> bool {
-    headers.get(CONTENT_ENCODING).is_none()  // Not already compressed
-        && headers.get(CONTENT_TYPE)
+    // Not already compressed
+    headers.get(CONTENT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .is_none_or(|enc| enc.eq_ignore_ascii_case(IDENTITY_ENC))
+
+        && // ... and not flagged no-buffering
+        headers.get(X_ACCEL_BUFFERING)
+        .and_then(|v| v.to_str().ok())
+        .is_none_or(|enc| ! enc.eq_ignore_ascii_case("no"))
+
+        && // ... and not flagged 'no-transform' (Cloudflare & haproxy honour this)
+        headers.get(CACHE_CONTROL)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_ascii_lowercase)
+        .is_none_or(|enc| !enc.contains(NO_TRANSFORM))
+
+        && // ... and content-type is known compressible
+        headers.get(CONTENT_TYPE)
         .and_then(|ct| ct.to_str().ok())
         .map(|ct| {
             // Trim trailing parameters (e.g: "...; charset=utf-8")
-            let mime = ct.split(';')
+            let mime = &ct.split(';')
                 .next().unwrap_or(ct)
-                .trim();
+                .trim()
+                .to_ascii_lowercase();
              // See https://github.com/jshttp/mime-db/blob/master/src/custom-suffix.json
              mime.ends_with("+json")
              || mime.ends_with("+xml")
-             || COMPRESSIBLE.contains(&mime)
+             || COMPRESSIBLE.contains(&mime.as_str())
         })
         .unwrap_or(false)
 }

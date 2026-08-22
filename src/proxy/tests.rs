@@ -1,9 +1,9 @@
 use anyhow::Result;
-use http::{uri::Builder, Uri};
+use http::{header::{CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE}, uri::Builder, HeaderMap, HeaderName, HeaderValue, Uri};
 use test_log::test;
 
 use crate::{
-    config::{Backend, ValidateSanitise}, proxy::{cleartext::rewrite_port, router::{Router, RouterBackend}, services::strip_port}
+    config::{Backend, ValidateSanitise}, proxy::{cleartext::rewrite_port, mimetypes::is_compressible, router::{Router, RouterBackend}, services::strip_port}
 };
 
 fn backend(path: &str, port: u16) -> Backend {
@@ -701,4 +701,167 @@ fn test_router_single_char_segments() -> Result<()> {
     assert!(router.lookup("/ab").is_none());
 
     Ok(())
+}
+
+fn compressible_headers(content_type: Option<&str>, content_encoding: Option<&str>) -> HeaderMap<HeaderValue> {
+    let mut headers = HeaderMap::new();
+    if let Some(ct) = content_type {
+        headers.insert(CONTENT_TYPE, HeaderValue::from_str(ct).unwrap());
+    }
+    if let Some(ce) = content_encoding {
+        headers.insert(CONTENT_ENCODING, HeaderValue::from_str(ce).unwrap());
+    }
+    headers
+}
+
+#[test]
+fn test_compressible_basic_types() {
+    assert!(is_compressible(&compressible_headers(Some("text/html"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/css"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/plain"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/json"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/xml"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/javascript"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/markdown"), None)));
+}
+
+#[test]
+fn test_compressible_binary_types() {
+    assert!(!is_compressible(&compressible_headers(Some("image/png"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("image/jpeg"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("image/gif"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("application/zip"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("application/pdf"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("application/gzip"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("video/mp4"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("audio/mpeg"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("font/woff"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("font/woff2"), None)));
+}
+
+#[test]
+fn test_compressible_missing_headers() {
+    assert!(!is_compressible(&compressible_headers(None, None)));
+    assert!(!is_compressible(&compressible_headers(None, Some("gzip"))));
+}
+
+#[test]
+fn test_compressible_content_type_parameters() {
+    assert!(is_compressible(&compressible_headers(Some("text/html; charset=utf-8"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/json; charset=utf-8"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/html;"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/html ; charset=utf-8"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/html; charset=utf-8; level=1"), None)));
+    assert!(is_compressible(&compressible_headers(Some("text/html;charset=UTF-8"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("; charset=utf-8"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("charset=utf-8"), None)));
+    assert!(!is_compressible(&compressible_headers(Some("text"), None)));
+}
+
+#[test]
+fn test_compressible_media_type_case_insensitive() {
+    // Media types are case-insensitive (RFC 9110 §8.3.1)
+    assert!(is_compressible(&compressible_headers(Some("TEXT/HTML"), None)));
+    assert!(is_compressible(&compressible_headers(Some("Text/HTML"), None)));
+    assert!(is_compressible(&compressible_headers(Some("tExT/HtMl"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/JSON"), None)));
+    assert!(is_compressible(&compressible_headers(Some("APPLICATION/JSON"), None)));
+    assert!(is_compressible(&compressible_headers(Some("TEXT/PLAIN; CHARSET=UTF-8"), None)));
+}
+
+#[test]
+fn test_compressible_structured_suffix() {
+    assert!(is_compressible(&compressible_headers(Some("application/vnd.api+json"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/problem+json"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/vnd.foo+xml"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/problem+xml"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/foo+json"), None)));
+}
+
+#[test]
+fn test_compressible_structured_suffix_case_insensitive() {
+    // The +json / +xml structured suffixes are case-insensitive (RFC 9110 §8.3.1)
+    assert!(is_compressible(&compressible_headers(Some("application/vnd.api+JSON"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/problem+Json"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/vnd.github+json"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/problem+XML"), None)));
+    assert!(is_compressible(&compressible_headers(Some("application/vnd.foo+Xml"), None)));
+}
+
+#[test]
+fn test_compressible_content_encoding_disables() {
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("gzip"))));
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("br"))));
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("deflate"))));
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("compress"))));
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("zstd"))));
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("gzip, br"))));
+    assert!(!is_compressible(&compressible_headers(Some("text/html"), Some("GZIP"))));
+}
+
+#[test]
+fn test_compressible_content_encoding_identity() {
+    // "identity" is the default no-op content coding (RFC 9110 §8.4.1);
+    // the representation is not encoded, so it should still be compressible.
+    assert!(is_compressible(&compressible_headers(Some("text/html"), Some("identity"))));
+    assert!(is_compressible(&compressible_headers(Some("application/json"), Some("identity"))));
+    assert!(!is_compressible(&compressible_headers(None, Some("identity"))));
+    assert!(is_compressible(&compressible_headers(Some("TEXT/HTML"), Some("IDENTITY"))));
+}
+
+#[test]
+fn test_compressible_no_transform() {
+    // Cache-Control: no-transform (RFC 9111 §5.2.2.6, RFC 9110 §7.7):
+    // an intermediary MUST NOT transform the content, so compression is disabled.
+    let mut h = compressible_headers(Some("text/html"), None);
+    h.insert(CACHE_CONTROL, HeaderValue::from_static("no-transform"));
+    assert!(!is_compressible(&h));
+
+    let mut h = compressible_headers(Some("application/json"), None);
+    h.insert(CACHE_CONTROL, HeaderValue::from_static("no-transform"));
+    assert!(!is_compressible(&h));
+
+    // Directives are case-insensitive (RFC 9111 §5.2)
+    let mut h = compressible_headers(Some("TEXT/HTML"), None);
+    h.insert(CACHE_CONTROL, HeaderValue::from_static("No-Transform"));
+    assert!(!is_compressible(&h));
+
+    // no-transform among other directives
+    let mut h = compressible_headers(Some("text/html"), None);
+    h.insert(CACHE_CONTROL, HeaderValue::from_static("max-age=3600, no-transform"));
+    assert!(!is_compressible(&h));
+
+    // A Cache-Control without no-transform does not disable compression
+    let mut h = compressible_headers(Some("text/html"), None);
+    h.insert(CACHE_CONTROL, HeaderValue::from_static("max-age=3600"));
+    assert!(is_compressible(&h));
+}
+
+#[test]
+fn test_compressible_x_accel_buffering() {
+    // X-Accel-Buffering: no (nginx convention) marks a streamed, unbuffered
+    // response that should be passed through without compression.
+    let x_accel = HeaderName::from_static("x-accel-buffering");
+
+    let mut h = compressible_headers(Some("text/html"), None);
+    h.insert(&x_accel, HeaderValue::from_static("no"));
+    assert!(!is_compressible(&h));
+
+    let mut h = compressible_headers(Some("application/json"), None);
+    h.insert(&x_accel, HeaderValue::from_static("no"));
+    assert!(!is_compressible(&h));
+
+    // Header value is case-insensitive
+    let mut h = compressible_headers(Some("text/html"), None);
+    h.insert(&x_accel, HeaderValue::from_static("NO"));
+    assert!(!is_compressible(&h));
+
+    // "yes" does not disable compression
+    let mut h = compressible_headers(Some("text/html"), None);
+    h.insert(&x_accel, HeaderValue::from_static("yes"));
+    assert!(is_compressible(&h));
+
+    // Absent does not disable compression
+    let h = compressible_headers(Some("text/html"), None);
+    assert!(is_compressible(&h));
 }
