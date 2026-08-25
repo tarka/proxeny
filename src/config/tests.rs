@@ -284,3 +284,10 @@ fn test_uri_with_scheme_no_authority() {
     let result: Result<Uri, _> = "unix:///var/run/socket.sock".parse();
     assert!(result.is_err());
 }
+
+#[test]
+fn test_hcl_vicarian_full_example() {
+    let config = hcl::Config::from_file("examples/vicarian-full.hcl".into()).unwrap();
+    assert!(config.acme.contains_key("le-porkbun"));
+
+}

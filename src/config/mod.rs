@@ -1,4 +1,5 @@
 mod cli;
+mod hcl;
 
 #[cfg(test)]
 mod tests;
@@ -190,8 +191,6 @@ pub struct Vhost {
     pub hostname: String,
     #[serde_inline_default(Vec::new())]
     pub aliases: Vec<String>,
-    #[serde_inline_default("[::]".to_string())]
-    pub listen: String,
     pub tls: TlsConfig,
     pub backends: Vec<Backend>,
 }
