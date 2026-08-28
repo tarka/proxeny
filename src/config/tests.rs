@@ -288,6 +288,6 @@ fn test_uri_with_scheme_no_authority() {
 #[test]
 fn test_hcl_vicarian_full_example() {
     let config = hcl::Config::from_file("examples/vicarian-full.hcl".into()).unwrap();
-    assert!(config.acme.contains_key("le-porkbun"));
+    assert!(config.tls.contains_key("le-porkbun"));
 
 }

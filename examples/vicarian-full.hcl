@@ -1,10 +1,9 @@
 
-
 // A definition of an ACME DNS-01 provider; there can be multiple of these
 // and be reused in multiple vhosts.
-acme "le-porkbun" {
+tls "le-porkbun" {
     acme_provider = "letsencrypt"    // Default
-    profile = "shortlived"
+    profile = "shortlived"           // 'classic' (default), 'tlsserver', or 'shortlived'
     contact = "admin@haltcondition.net"  // Required
     challenge {
         type = "dns-01"
@@ -24,13 +23,19 @@ acme "le-porkbun" {
 }
 
 
-acme "le-http01" {
+tls "le-http01" {
     contact = "admin@haltcondition.net"
     challenge {
         type = "http-01"
         // This type does not require any additional information.
     }
-    profile = "tlsserver"  // Default
+    profile = "classic" // Default
+}
+
+tls "snakeoil" {
+    keyfile = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
+    certfile = "/etc/ssl/private/ssl-cert-snakeoil.key"
+    reload = true
 }
 
 // Optional; otherwise defaults as below
@@ -42,7 +47,7 @@ listen {
 
 vhost "haltcondition.net" {
     // Required; inserts the definition defined above
-    acme = "le-porkbun"
+    tls = "le-porkbun"
 
     // Optional
     aliases = [
@@ -57,14 +62,14 @@ vhost "haltcondition.net" {
 
     backend "/html" {
         type = "static"
-        path = "/var/www/haltcondition.net"
+        root = "/var/www/haltcondition.net"
     }
 }
 
 
 vhost "vicarian.org" {
     // Required; inserts the definition defined above
-    acme = "le-http01"
+    tls = "le-http01"
 
     // Optional
     aliases = [
@@ -78,6 +83,6 @@ vhost "vicarian.org" {
 
     backend "/html" {
         type = "static"
-        path = "/var/www/vicarian.org"
+        root = "/var/www/vicarian.org"
     }
 }
