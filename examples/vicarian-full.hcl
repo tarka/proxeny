@@ -1,7 +1,7 @@
 
 // A definition of an ACME DNS-01 provider; there can be multiple of these
 // and be reused in multiple vhosts.
-tls "le-porkbun" {
+acme "le-porkbun" {
     acme_provider = "letsencrypt"    // Default
     profile = "shortlived"           // 'classic' (default), 'tlsserver', or 'shortlived'
     contact = "admin@haltcondition.net"  // Required
@@ -23,7 +23,7 @@ tls "le-porkbun" {
 }
 
 
-tls "le-http01" {
+acme "le-http01" {
     contact = "admin@haltcondition.net"
     challenge {
         type = "http-01"
@@ -32,7 +32,7 @@ tls "le-http01" {
     profile = "classic" // Default
 }
 
-tls "snakeoil" {
+cert "snakeoil" {
     keyfile = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
     certfile = "/etc/ssl/private/ssl-cert-snakeoil.key"
     reload = true

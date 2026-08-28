@@ -16,21 +16,17 @@ use tracing_log::log::info;
 
 use crate::config::deserialize_canonical;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct Config {
-    /// Named TLS certificate definitions (ACME or static files).
-    /// Key is the label from `tls "<name>" { ... }`.
-    #[serde(default)]
-    pub tls: HashMap<String, TlsConfig>,
-
-    /// Global listen configuration. Optional; defaults are applied.
-    #[serde(default)]
+    /// Global listen configuration. Optional; all members have defaults.
     pub listen: Listen,
+
+    /// Named TLS certificate definitions (ACME or certificate files).
+    pub tls: HashMap<String, TlsConfig>,
 
     /// Named virtual host definitions.
     /// Key is the label from `vhost "<domain>" { ... }`.
-    #[serde(default)]
-    pub vhost: HashMap<String, Vhost>,
+    pub vhosts: HashMap<String, Vhost>,
 }
 
 impl Config {
@@ -38,12 +34,26 @@ impl Config {
         info!("Loading config {file}");
         let key = std::fs::read_to_string(file)
             .context("Error loading config file {file}")?;
-        let mut config: Config = hcl::from_str(&key)?;
+        let raw: RawConfig = hcl::from_str(&key)?;
+
+        // Merge `acme` and `cert` blocks into a single `tls` map.
+        let acme = raw.acme.into_iter()
+            .map(|(k, v)| (k, TlsConfig::Acme(v)));
+        let certs = raw.cert.into_iter()
+            .map(|(k, v)| (k, TlsConfig::Cert(v)));
+        let tls = acme.chain(certs)
+            .collect::<HashMap<String, TlsConfig>>();
+
+        let mut config = Config {
+            tls,
+            listen: raw.listen,
+            vhosts: raw.vhost,
+        };
 
         // The vhost hostname is the block label, i.e. the map key;
         // copy it into the struct. (The backend path is likewise the
         // key of `vhost.backend`.)
-        for (hostname, vhost) in config.vhost.iter_mut() {
+        for (hostname, vhost) in config.vhosts.iter_mut() {
             vhost.hostname = hostname.clone();
         }
 
@@ -51,6 +61,21 @@ impl Config {
 
         Ok(config)
     }
+}
+
+/// Rather than use struggle with serde/config mapping we use a raw
+/// target that better matches the HCL block structure and restructure
+/// during validation/transform.
+#[derive(Debug, Deserialize)]
+struct RawConfig {
+    #[serde(default)]
+    acme: HashMap<String, AcmeConfig>,
+    #[serde(default)]
+    cert: HashMap<String, FilesConfig>,
+    #[serde(default)]
+    listen: Listen,
+    #[serde(default)]
+    vhost: HashMap<String, Vhost>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -109,10 +134,10 @@ pub struct FilesConfig {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(rename_all = "lowercase")]
 pub enum TlsConfig {
     Acme(AcmeConfig),
-    Files(FilesConfig),
+    Cert(FilesConfig),
 }
 
 #[serde_inline_default]
@@ -133,7 +158,6 @@ impl Default for Listen {
         }
     }
 }
-
 
 #[serde_inline_default]
 #[derive(Debug, Deserialize)]
