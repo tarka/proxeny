@@ -2,15 +2,14 @@
 // FIXME
 #![allow(unused)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap};
+use std::net::{IpAddr, SocketAddr, SocketAddrV6};
 
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use http::Uri;
-// use hcl::eval::{Context, Evaluate, FuncArgs, FuncDef, ParamType};
-// use hcl::{Body, Value};
 use serde::Deserialize;
-use serde_default_utils::{default_bool, serde_inline_default};
+use serde_default_utils::default_bool;
 use strum_macros::IntoStaticStr;
 use tracing_log::log::info;
 
@@ -36,12 +35,12 @@ impl Config {
             .context("Error loading config file {file}")?;
         let raw: RawConfig = hcl::from_str(&key)?;
 
-        // Merge `acme` and `cert` blocks into a single `tls` map.
+        // Wrap `acme` and `cert` blocks in an enum.
         let acme = raw.acme.into_iter()
             .map(|(k, v)| (k, TlsConfig::Acme(v)));
-        let certs = raw.cert.into_iter()
-            .map(|(k, v)| (k, TlsConfig::Cert(v)));
-        let tls = acme.chain(certs)
+        let tls = raw.cert.into_iter()
+            .map(|(k, v)| (k, TlsConfig::Cert(v)))
+            .chain(acme)
             .collect::<HashMap<String, TlsConfig>>();
 
         let mut config = Config {
@@ -63,9 +62,9 @@ impl Config {
     }
 }
 
-/// Rather than use struggle with serde/config mapping we use a raw
-/// target that better matches the HCL block structure and restructure
-/// during validation/transform.
+/// Rather than use struggle with serde/config mapping we use an
+/// intermediate struct that better matches the HCL schema and
+/// restructure during validation/transform.
 #[derive(Debug, Deserialize)]
 struct RawConfig {
     #[serde(default)]
@@ -77,6 +76,26 @@ struct RawConfig {
     #[serde(default)]
     vhost: HashMap<String, Vhost>,
 }
+
+
+#[derive(Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RawListen {
+    addrs: Vec<String>,
+    insecure_port: Option<u16>,
+    tls_port: u16,
+}
+
+impl Default for RawListen {
+    fn default() -> Self {
+        Self {
+            addrs: vec!["[::]".to_string()],
+            insecure_port: None,
+            tls_port: 443
+        }
+    }
+}
+
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -140,26 +159,18 @@ pub enum TlsConfig {
     Cert(FilesConfig),
 }
 
-#[serde_inline_default]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Listen {
-    addrs: Vec<String>,
+    #[serde(default)]
+    pub addrs: Vec<String>,
+//    pub addrs: Vec<SocketAddr>,
+    #[serde(default)]
     pub insecure_port: Option<u16>,
+    #[serde(default)]
     pub tls_port: u16,
 }
 
-impl Default for Listen {
-    fn default() -> Self {
-        Self {
-            addrs: vec!["[::]".to_string()],
-            insecure_port: None,
-            tls_port: 443
-        }
-    }
-}
-
-#[serde_inline_default]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Vhost {
@@ -168,7 +179,7 @@ pub struct Vhost {
     /// to calculate the domain. Populated from the `vhost` block label.
     #[serde(default)]
     pub hostname: String,
-    #[serde_inline_default(Vec::new())]
+    #[serde(default)]
     pub aliases: Vec<String>,
     /// Key is the label from `backend "<path>" { ... }`, i.e. the path.
     #[serde(default)]
