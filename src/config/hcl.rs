@@ -13,7 +13,12 @@ use serde_default_utils::default_bool;
 use strum_macros::IntoStaticStr;
 use tracing_log::log::info;
 
-use crate::config::deserialize_canonical;
+use super::{
+    deserialize_canonical,
+    expand_listen_addrs,
+    ValidateSanitise,
+};
+
 
 #[derive(Debug)]
 pub struct Config {
@@ -43,9 +48,11 @@ impl Config {
             .chain(acme)
             .collect::<HashMap<String, TlsConfig>>();
 
+        let listen = Listen::try_from(raw.listen)?;
+
         let mut config = Config {
             tls,
-            listen: raw.listen,
+            listen,
             vhosts: raw.vhost,
         };
 
@@ -62,6 +69,7 @@ impl Config {
     }
 }
 
+
 /// Rather than use struggle with serde/config mapping we use an
 /// intermediate struct that better matches the HCL schema and
 /// restructure during validation/transform.
@@ -72,7 +80,7 @@ struct RawConfig {
     #[serde(default)]
     cert: HashMap<String, FilesConfig>,
     #[serde(default)]
-    listen: Listen,
+    listen: RawListen,
     #[serde(default)]
     vhost: HashMap<String, Vhost>,
 }
@@ -95,7 +103,6 @@ impl Default for RawListen {
         }
     }
 }
-
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -163,12 +170,22 @@ pub enum TlsConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct Listen {
     #[serde(default)]
-    pub addrs: Vec<String>,
-//    pub addrs: Vec<SocketAddr>,
+    pub addrs: Vec<SocketAddr>,
     #[serde(default)]
     pub insecure_port: Option<u16>,
     #[serde(default)]
     pub tls_port: u16,
+}
+
+impl TryFrom<RawListen> for Listen {
+    type Error = anyhow::Error;
+    fn try_from(raw: RawListen) -> Result<Self> {
+        Ok(Listen {
+            addrs: expand_listen_addrs(&raw.addrs)?,
+            insecure_port: raw.insecure_port,
+            tls_port: raw.tls_port,
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,21 +203,35 @@ pub struct Vhost {
     pub backend: HashMap<String, Backend>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Backend {
+    #[serde(rename = "type", flatten)]
+    pub backend_type: BackendType,
+    #[serde(default)]
+    pub auth_key: Option<String>,
+
+}
+
 #[derive(Debug, PartialEq, Eq, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
-pub enum Backend {
-    Proxy {
-        #[serde(with = "http_serde::uri")]
-        url: Uri,
-        #[serde(default = "default_bool::<false>")]
-        trust: bool,
-        #[serde(default)]
-        auth_key: Option<String>,
-    },
-    Static {
-        root: String,
-        #[serde(default)]
-        auth_key: Option<String>,
-    },
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum BackendType {
+    Proxy(ProxyBackend),
+    Static(StaticBackend),
+    Metrics,
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProxyBackend {
+    #[serde(with = "http_serde::uri")]
+    pub url: Uri,
+    #[serde(default = "default_bool::<false>")]
+    pub trust: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StaticBackend {
+    pub root: String,
 }
 

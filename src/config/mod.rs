@@ -308,7 +308,7 @@ fn to_sockaddr(addr: Option<SockaddrStorage>) -> Option<SocketAddr> {
 }
 
 
-fn expand_listen_addrs(addrs: &[String]) -> Result<Vec<SocketAddr>> {
+pub(crate) fn expand_listen_addrs(addrs: &[String]) -> Result<Vec<SocketAddr>> {
     let ips = addrs.iter()
         .map(|addr_str| {
             if let Some((pref, body)) = addr_str.split_once(SPECIAL_ADDRESS_DELIMITER) {

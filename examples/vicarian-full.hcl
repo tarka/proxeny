@@ -64,6 +64,11 @@ vhost "haltcondition.net" {
         type = "static"
         root = "/var/www/haltcondition.net"
     }
+
+    backend "/metrics" {
+        auth_key = "my-secret-key"
+        type = "metrics"
+    }
 }
 
 

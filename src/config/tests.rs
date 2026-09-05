@@ -1,5 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4};
 
+use crate::config::hcl::{ProxyBackend, StaticBackend};
+
 use super::*;
 
 #[test]
@@ -338,19 +340,25 @@ fn test_hcl_vicarian_full_example() -> Result<()> {
     assert_eq!("haltcondition.net", hc.hostname);
     assert_eq!("le-porkbun", hc.tls);
     assert_eq!(vec!["www.haltcondition.net".to_string()], hc.aliases);
-    assert_eq!(2, hc.backend.len());
-    let hcl::Backend::Proxy { url, trust, auth_key } = hc.backend.get("/").unwrap() else {
+    assert_eq!(3, hc.backend.len());
+    let hcl::Backend { backend_type: hcl::BackendType::Proxy(ProxyBackend { url, trust }), auth_key } = hc.backend.get("/").unwrap() else {
         bail!("expected proxy backend /")
     };
     assert_eq!("http", url.scheme_str().unwrap());
     assert_eq!("192.168.20.27:9191", url.authority().unwrap().as_str());
     assert!(!trust);
     assert!(auth_key.is_none());
-    let hcl::Backend::Static { root, auth_key } = hc.backend.get("/html").unwrap() else {
+
+    let hcl::Backend { backend_type: hcl::BackendType::Static(StaticBackend { root } ), auth_key } = hc.backend.get("/html").unwrap() else {
         bail!("expected static backend /html")
     };
     assert_eq!("/var/www/haltcondition.net", root);
     assert!(auth_key.is_none());
+
+    let hcl::Backend { backend_type: hcl::BackendType::Metrics, auth_key: Some(keyval) } = hc.backend.get("/metrics").unwrap() else {
+        bail!("expected static backend /metrics")
+    };
+    assert_eq!(keyval, "my-secret-key");
 
     let vo = config.vhosts.get("vicarian.org")
         .ok_or_else(|| anyhow!("missing vhost vicarian.org"))?;
@@ -358,12 +366,13 @@ fn test_hcl_vicarian_full_example() -> Result<()> {
     assert_eq!("le-http01", vo.tls);
     assert_eq!(vec!["www.vicarian.org".to_string()], vo.aliases);
     assert_eq!(2, vo.backend.len());
-    let hcl::Backend::Proxy { url, .. } = vo.backend.get("/").unwrap() else {
+    let hcl::Backend { backend_type: hcl::BackendType::Proxy(ProxyBackend { url, .. }), auth_key } = vo.backend.get("/").unwrap() else {
         bail!("expected proxy backend /")
     };
+
     assert_eq!("http", url.scheme_str().unwrap());
     assert_eq!("192.168.20.27:9192", url.authority().unwrap().as_str());
-    let hcl::Backend::Static { root, .. } = vo.backend.get("/html").unwrap() else {
+    let hcl::Backend { backend_type: hcl::BackendType::Static(StaticBackend { root, .. }), auth_key } = vo.backend.get("/html").unwrap() else {
         bail!("expected static backend /html")
     };
     assert_eq!("/var/www/vicarian.org", root);
