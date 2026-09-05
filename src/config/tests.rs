@@ -39,7 +39,7 @@ fn test_dns01_example_config() -> Result<()> {
                 wildcard: false,
                 dns_provider: zone_update::Provider::PorkBun(_)
             }),
-            profile: AcmeProfile::TlsServer,
+            profile: AcmeProfile::Classic,
         })));
 
     assert_eq!("/", config.vhosts[0].backends[0].path);
