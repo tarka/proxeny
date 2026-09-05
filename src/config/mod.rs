@@ -51,8 +51,9 @@ pub enum AcmeProvider {
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum AcmeProfile {
-    ShortLived,
     #[default]
+    Classic,
+    ShortLived,
     TlsServer,
 }
 

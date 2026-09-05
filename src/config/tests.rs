@@ -303,7 +303,7 @@ fn test_hcl_vicarian_full_example() -> Result<()> {
         .ok_or_else(|| anyhow!("missing tls definition le-porkbun"))?;
     assert!(matches!(le_porkbun, hcl::TlsConfig::Acme(hcl::AcmeConfig {
         acme_provider: hcl::AcmeProvider::LetsEncrypt,
-        profile: hcl::AcmeProfile::ShortLived,
+        profile: AcmeProfile::ShortLived,
         contact,
         challenge: hcl::AcmeChallenge::Dns01(hcl::DnsProvider {
             wildcard: true,
@@ -316,7 +316,7 @@ fn test_hcl_vicarian_full_example() -> Result<()> {
         .ok_or_else(|| anyhow!("missing tls definition le-http01"))?;
     assert!(matches!(le_http01, hcl::TlsConfig::Acme(hcl::AcmeConfig {
         acme_provider: hcl::AcmeProvider::LetsEncrypt,
-        profile: hcl::AcmeProfile::Classic,
+        profile: AcmeProfile::Classic,
         contact: _,
         challenge: hcl::AcmeChallenge::Http01,
     })));
@@ -365,17 +365,23 @@ fn test_hcl_vicarian_full_example() -> Result<()> {
     assert_eq!("vicarian.org", vo.hostname);
     assert_eq!("le-http01", vo.tls);
     assert_eq!(vec!["www.vicarian.org".to_string()], vo.aliases);
-    assert_eq!(2, vo.backend.len());
-    let hcl::Backend { backend_type: hcl::BackendType::Proxy(ProxyBackend { url, .. }), auth_key } = vo.backend.get("/").unwrap() else {
+    assert_eq!(3, vo.backend.len());
+
+    let hcl::Backend { backend_type: hcl::BackendType::Proxy(ProxyBackend { url, .. }), auth_key: _ } = vo.backend.get("/").unwrap() else {
         bail!("expected proxy backend /")
     };
-
     assert_eq!("http", url.scheme_str().unwrap());
     assert_eq!("192.168.20.27:9192", url.authority().unwrap().as_str());
-    let hcl::Backend { backend_type: hcl::BackendType::Static(StaticBackend { root, .. }), auth_key } = vo.backend.get("/html").unwrap() else {
+
+    let hcl::Backend { backend_type: hcl::BackendType::Static(StaticBackend { root, .. }), auth_key: _ } = vo.backend.get("/html").unwrap() else {
         bail!("expected static backend /html")
     };
     assert_eq!("/var/www/vicarian.org", root);
 
+    let hcl::Backend { backend_type: hcl::BackendType::Proxy(ProxyBackend { url, trust }), auth_key: _ } = vo.backend.get("/trusted").unwrap() else {
+        bail!("expected proxy backend /")
+    };
+    assert_eq!("https", url.scheme_str().unwrap());
+    assert!(trust);
     Ok(())
 }

@@ -82,8 +82,15 @@ vhost "vicarian.org" {
     ]
 
     backend "/" {
-        type = "proxy"    // Default
+        type = "proxy"
         url = "http://192.168.20.27:9192"
+    }
+
+    backend "/trusted" {
+        type = "proxy"
+        url = "https://127.0.0.1:4443"
+        // `trust` bypasses TLS cert checks, allowing backends with self-signed certificates.
+        trust = true
     }
 
     backend "/html" {

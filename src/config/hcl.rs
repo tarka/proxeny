@@ -10,8 +10,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use http::Uri;
 use serde::Deserialize;
 use serde_default_utils::default_bool;
-use strum_macros::IntoStaticStr;
 use tracing_log::log::info;
+
+use crate::config::{AcmeProfile, TlsFilesConfig};
 
 use super::{
     deserialize_canonical,
@@ -77,10 +78,13 @@ impl Config {
 struct RawConfig {
     #[serde(default)]
     acme: HashMap<String, AcmeConfig>,
+
     #[serde(default)]
-    cert: HashMap<String, FilesConfig>,
+    cert: HashMap<String, TlsFilesConfig>,
+
     #[serde(default)]
     listen: RawListen,
+
     #[serde(default)]
     vhost: HashMap<String, Vhost>,
 }
@@ -122,16 +126,6 @@ pub struct AcmeConfig {
     pub challenge: AcmeChallenge,
 }
 
-#[derive(Debug, Default, Deserialize, IntoStaticStr)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
-pub enum AcmeProfile {
-    #[default]
-    Classic,
-    ShortLived,
-    TlsServer,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct DnsProvider {
     #[serde(default = "default_bool::<false>")]
@@ -149,21 +143,10 @@ pub enum AcmeChallenge {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct FilesConfig {
-    #[serde(deserialize_with = "deserialize_canonical")]
-    pub keyfile: Utf8PathBuf,
-    #[serde(deserialize_with = "deserialize_canonical")]
-    pub certfile: Utf8PathBuf,
-    #[serde(default = "default_bool::<true>")]
-    pub reload: bool,
-}
-
-#[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TlsConfig {
     Acme(AcmeConfig),
-    Cert(FilesConfig),
+    Cert(TlsFilesConfig),
 }
 
 #[derive(Debug, Default, Deserialize)]
