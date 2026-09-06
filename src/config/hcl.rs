@@ -2,11 +2,15 @@
 // FIXME
 #![allow(unused)]
 
-use std::{collections::HashMap};
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6};
 
-use anyhow::{Context, Result};
+use anyhow::{Context as AnyhowContext, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use hcl::{
+    Body, Value,
+    eval::{Context, Evaluate, FuncArgs, FuncDef, ParamType}
+};
 use http::Uri;
 use serde::Deserialize;
 use serde_default_utils::default_bool;
@@ -37,9 +41,17 @@ pub struct Config {
 impl Config {
     pub fn from_file(file: &Utf8Path) -> Result<Self> {
         info!("Loading config {file}");
-        let key = std::fs::read_to_string(file)
+        let file = std::fs::read_to_string(file)
             .context("Error loading config file {file}")?;
-        let raw: RawConfig = hcl::from_str(&key)?;
+
+        // Parse into native hcl-rs structures, then process any directives:
+        let body = hcl::parse(&file)?;
+        let eval_ctx = build_eval_context();
+        let evaled: Body = body.evaluate(&eval_ctx)?;
+
+        // Convert to the intermediate 'raw' config before performing
+        // any validation/expansion.
+        let raw: RawConfig = hcl::from_body(evaled)?;
 
         // Wrap `acme` and `cert` blocks in an enum.
         let acme = raw.acme.into_iter()
@@ -70,10 +82,34 @@ impl Config {
     }
 }
 
+// Wire in the HCL functions
+fn build_eval_context() -> Context<'static> {
+    let mut ctx = Context::new();
+    let mut decfn = |(name, func)| ctx.declare_func(name, func);
 
-/// Rather than use struggle with serde/config mapping we use an
-/// intermediate struct that better matches the HCL schema and
-/// restructure during validation/transform.
+    decfn(env_fn());
+
+    ctx
+}
+
+fn env_fn() -> (&'static str, FuncDef) {
+    // Register the env() function
+    let env_func = FuncDef::builder()
+        .param(ParamType::String)
+        .build(|args: FuncArgs| {
+            let var_name = args[0]
+                .as_str()
+                .ok_or_else(|| "env() argument must be a string".to_string())?;
+            let value = std::env::var(var_name).unwrap_or_default();
+            Ok(Value::from(value))
+        });
+    ("env", env_func)
+}
+
+
+// Rather than use struggle with serde/config mapping we use an
+// intermediate struct that better matches the HCL schema and
+// restructure during validation/transform.
 #[derive(Debug, Deserialize)]
 struct RawConfig {
     #[serde(default)]
@@ -192,7 +228,6 @@ pub struct Backend {
     pub backend_type: BackendType,
     #[serde(default)]
     pub auth_key: Option<String>,
-
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -217,4 +252,3 @@ pub struct ProxyBackend {
 pub struct StaticBackend {
     pub root: String,
 }
-

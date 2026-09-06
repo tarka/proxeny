@@ -289,6 +289,10 @@ fn test_uri_with_scheme_no_authority() {
 
 #[test]
 fn test_hcl_vicarian_full_example() -> Result<()> {
+    unsafe {
+        std::env::set_var("PORKBUN_KEY", "PORKBUN_KEY");
+        std::env::set_var("PORKBUN_SECRET", "PORKBUN_SECRET");
+    };
     let config = hcl::Config::from_file("examples/vicarian-full.hcl".into())?;
 
     // `listen` block
@@ -307,9 +311,14 @@ fn test_hcl_vicarian_full_example() -> Result<()> {
         contact,
         challenge: hcl::AcmeChallenge::Dns01(hcl::DnsProvider {
             wildcard: true,
-            dns_provider: zone_update::Provider::PorkBun(_),
+            dns_provider: zone_update::Provider::PorkBun(zone_update::porkbun::Auth {
+                key,
+                secret,
+            } ),
         }),
-    }) if contact == "admin@haltcondition.net"));
+    }) if contact == "admin@haltcondition.net"
+                     && key == "PORKBUN_KEY"
+                     && secret == "PORKBUN_SECRET"));
 
     // `acme "le-http01"` — http-01, defaults for provider and profile.
     let le_http01 = config.tls.get("le-http01")
